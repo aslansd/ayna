@@ -1,0 +1,289 @@
+# ayna
+
+**آینه / ayna** — *mirror.* Persian *āyeneh*; *ayna* in Turkish and Azerbaijani.
+
+**Know whether your inferred dynamics are real, before you interpret them.**
+
+ayna reads the outputs of a fitted data-driven dynamics model (LFADS, a
+sequential autoencoder, a neural ODE, anything that turns spikes into latents
+and rates) and reports *which failure mode it has, and where*. It does not
+train anything. It runs on a CPU in seconds.
+
+```bash
+pip install ayna
+```
+
+Python 3.10+. Apache 2.0. Three dependencies: numpy, scipy, scikit-learn. No
+torch, no GPU, no downloads.
+
+---
+
+## The failure that matters
+
+A model can reconstruct held-out neurons almost perfectly and still give you
+the wrong dynamics. The Computation-through-Dynamics Toolkit (CtD; Versteeg et
+al., *PLOS Comput Biol* 2026) names three ways this happens:
+
+- **Underfitting** — the model misses latent structure that is really there.
+- **Feature invention** — the model adds latent structure that is not there.
+  Because the readout ignores it, it costs nothing in reconstruction. In CtD's
+  3BFF sweep, the models that invent features *win* on co-BPS.
+- **Dynamical misattribution** — the inferred inputs do the work the dynamics
+  should do. Latents and rates can both look right. Only the inputs, and the
+  dynamics left behind, are wrong.
+
+CtD measures all three when ground truth is known: State R², Rate R² and
+Input R². On a real recording there is no ground truth, and reconstruction
+alone points the wrong way. ayna is the checklist for that situation. It runs
+every check the outputs allow, says which ones it could not run, and gets
+sharper when you give it more.
+
+### Where this sits
+
+- **CtD** is the research platform. It has the datasets, the training
+  pipelines and the ground-truth metrics, and it needs torch, Lightning, Ray,
+  Hydra and several GB of pretrained models.
+- **The Neural Latents Benchmark** scores reconstruction on real recordings.
+- **ayna** is the step after training, on your own data. It ports CtD's
+  metrics to numpy, adds probes that need no ground truth, turns both into
+  named findings, and validates its own detectors wherever ground truth exists.
+
+---
+
+## Quickstart
+
+```bash
+# 1. A model output with known, deliberately injected faults
+ayna synth field --faults feature_invention misattribution=0.8
+
+# 2. Diagnose it -- no ground truth used for the verdicts
+ayna scan datasets/field.npz --out reports/field
+
+# 3. A latent-size sweep: is the best co-BPS model the one to trust?
+ayna synth sweep --sweep
+ayna select datasets/sweep --out reports/sweep --plot
+
+# 4. How often are the detectors right? (compares against ground truth)
+ayna validate
+```
+
+From Python:
+
+```python
+from ayna import load_bundle, scan
+
+report = scan(load_bundle("run.npz"))
+for f in report["findings"]:
+    if f["tier"] < 2:                 # tier 2 = ground-truth confirmations
+        print(f["severity"], f["id"], f["where"])
+    print("   ", f["what"])
+```
+
+What a scan says (abridged):
+
+```
+WARNING (experimental) DYNAMICAL_MISATTRIBUTION  [tier 0: outputs only]
+          the latent state at the same instant predicts the inferred inputs (R² 0.86) ...
+WARNING   FEATURE_INVENTION  [tier 0: outputs only]
+          where: latent PCs 4, 5 (30% of latent variance)
+          Linear cycle-consistency is 0.71: part of the inferred latent activity cannot
+          be regenerated from the model's own predicted rates ...
+ground truth says
+  DYNAMICAL_MISATTRIBUTION   confirmed: Input R² 0.087 (flag if < 0.5)
+  FEATURE_INVENTION          confirmed: State R² 0.707 (flag if < 0.9)
+not assessed (a check that did not run is not a clean result)
+  DYNAMICAL_MISATTRIBUTION   tier 1: no dynamics callable attached
+```
+
+`scan` exits with status 1 when a finding from the model's outputs is an
+error, so it can gate a pipeline.
+
+---
+
+## Three tiers of evidence
+
+| Tier | You provide | Unlocks |
+|---|---|---|
+| **0** | spikes, predicted rates, latents (+ held-out neurons, + inferred or supplied inputs) | everything below marked tier 0 |
+| **1** | a dynamics callable `f(z, u) -> z_next` (Python API) | autonomous-rollout and zero-input fixed-point probes |
+| **2** | true latents / rates / inputs (synthetic data only) | CtD's Rate R², State R², Input R², and `ayna validate` |
+
+Every finding records the tier it came from. A real recording gets tier 0, or
+tier 1 if you attach the dynamics. Tier 2 exists so the tier-0 and tier-1
+verdicts can be checked.
+
+## The detectors
+
+| Finding | Question it answers | Tier |
+|---|---|---|
+| `UNDERFITTING` | Do the validation residuals share slow structure beyond chance? Does co-BPS fail to beat a smoothed-spikes Poisson GLM? Reports *when* in the trial and *which* neurons. | 0 |
+| `FEATURE_INVENTION` | Can the latents be regenerated from the model's own rates (cycle-consistency)? Reports *which latent PCs* cannot, and their share of variance. | 0 |
+| `READOUT_NULLSPACE` | Are there latent directions the readout ignores, where invention could hide later? | 0 |
+| `NONLINEAR_READOUT` | Is the latent→log-rate map far from linear? If so, the linear metrics are not trusted and ayna uses a nonlinear cycle-consistency instead. | 0 |
+| `DYNAMICAL_MISATTRIBUTION` *(experimental)* | Do the latents at the same instant predict the inferred inputs (*input leakage*)? With inputs clamped to zero, do the model's own dynamics lose a state that simply holding would keep? | 0 / 1 |
+| `INPUT_INHERITED_STRUCTURE` | With supplied inputs, how much of the latent variance is just a short filter of the inputs (CtD's RandomTarget warning)? | 0 |
+| `RECONSTRUCTION_TRAP` | In a sweep, is the best-co-BPS model off the reconstruction × simplicity Pareto front's knee? (`ayna select`) | 0 |
+
+`DYNAMICAL_MISATTRIBUTION` is ayna's own contribution and is labelled
+experimental. CtD lists a ground-truth-free input-accuracy metric as "a major
+focus of future work". The leakage probe tests one idea from CtD Fig 6B:
+badly inferred inputs "resembled the state of the network". In closed-loop
+tasks, true inputs (sensory feedback) can legitimately depend on the state, so
+read that finding with the task in mind.
+
+## Validation
+
+`ayna validate` simulates a corpus. Each case is a known system, either a
+3-bit flip-flop or an input-driven system with no memory, plus simulated model
+outputs with one fault injected at a random severity. Severities run from
+barely there to blatant, and noise and recording size vary too. ayna scans
+each case without ground truth, then compares each verdict with the
+ground-truth verdict on the same bundle.
+
+From `ayna validate --n 10 --seed 7` (85 bundles). This corpus was not used
+to set any threshold:
+
+| detector | tier | TP | FP | FN | TN | precision | recall |
+|---|---|---|---|---|---|---|---|
+| `FEATURE_INVENTION` | 0 | 14 | 0 | 0 | 71 | 1.00 | 1.00 |
+| `DYNAMICAL_MISATTRIBUTION` | 0 | 5 | 0 | 0 | 30 | 1.00 | 1.00 |
+| `DYNAMICAL_MISATTRIBUTION` | 1 | 5 | 0 | 0 | 30 | 1.00 | 1.00 |
+| `INPUT_INHERITED_STRUCTURE` | 0 | 10 | 0 | 0 | 10 | 1.00 | 1.00 |
+| `NONLINEAR_READOUT` | 0 | 10 | 0 | 0 | 75 | 1.00 | 1.00 |
+| `UNDERFITTING` | 0 | 13 | 2 | 2 | 68 | 0.87 | 0.87 |
+
+The `UNDERFITTING` disagreements are informative:
+
+- **The two "false positives"** are injected underfits so mild that Rate R²
+  stays above the 0.90 truth line. The residual probe still sees the missing
+  shared component. On this corpus that is arguably a correct catch, scored as
+  wrong by the definition of truth.
+- **The two misses** are clean models on a nonlinear readout, where the
+  nonlinearity amplifies rate noise below the truth line without leaving
+  shared structure.
+
+Where the truth line came from: it was 0.85 in the first run, on seed 42. It
+was raised to 0.90 after that run, because clean models never fall below 0.93
+while injected underfits sat between 0.85 and 0.93. Seed 7 was run only
+afterwards.
+
+**Read this as a test that the detectors work as designed, not that they
+transfer.** ayna's own simulator injected these faults, and the same author
+wrote the detectors. The real test is a corpus of *trained* models with ground
+truth. CtD's latent-size and KL-penalty sweeps are the obvious source:
+`ayna export-ctd` writes them as bundles, and `ayna validate DIR` scores the
+detectors on them. That has not been done yet. Until it has, the thresholds
+are calibrated on ayna's synthetic faults only.
+
+---
+
+## The bundle
+
+One `.npz` per fitted model. Rates are expected counts **per bin**, in the
+same unit as the spikes.
+
+| key | shape | |
+|---|---|---|
+| `spikes` | (R, T, N) | required |
+| `rates` | (R, T, N) | required: predicted, held-in and held-out |
+| `latents` | (R, T, D) | required |
+| `heldout` | (N,) bool | neurons never given to the model (enables co-BPS) |
+| `val` | (R,) bool | validation trials (default: last 20%) |
+| `trial_lens` | (R,) int | for padded trials |
+| `inputs` | (R, T, U) | with `meta["inputs_kind"]` = `supplied` or `inferred` |
+| `true_latents`, `true_rates`, `true_inputs` | | ground truth (tier 2) |
+| `meta` | JSON string | name, model, bin size, anything |
+
+```python
+from ayna import Bundle
+Bundle(spikes=y, rates=r, latents=z, heldout=ho, inputs=u_hat,
+       meta={"inputs_kind": "inferred", "name": "lfads_run7"}).save("lfads_run7.npz")
+```
+
+Tier 1 is Python-only, because a callable cannot be stored in a `.npz`:
+
+```python
+report = scan(load_bundle("run.npz", dynamics=lambda z, u: my_model.step(z, u)))
+```
+
+### From the Computation-through-Dynamics Toolkit
+
+Inside the CtD environment:
+
+```bash
+ayna export-ctd content/trained_models/dd/<run>/ run.npz --model-type LFADS \
+    --tt content/trained_models/tt/<tt_run>/
+```
+
+The exporter uses only the getters CtD's own `Comparison.compute_metrics`
+uses. It was written against CtD 1.0.2 and tested against stand-in objects,
+**not yet against a live CtD install**, because the pretrained models are Git
+LFS files. Please report any mismatch.
+
+## Provenance
+
+```bash
+pip install "ayna[provenance]"
+ayna scan run.npz --out reports/run --daftar
+```
+
+Each scan becomes a [daftar](https://pypi.org/project/daftar/) run. It records
+the bundle hash, the thresholds, the environment and the headline metrics, so
+`daftar diff` can tell you why two scans disagree.
+
+## Thresholds
+
+Every threshold has a name and a default, and every one can be overridden:
+
+```bash
+ayna scan run.npz --set invention_cycle_warning=0.8 leakage_r2=0.6
+```
+
+The defaults come from ayna's synthetic corpus. Absolute values of
+cycle-consistency vary with model class: CtD reports values of 0.3–0.5 for
+well-behaved LFADS models with inferred inputs. Compare models of the same
+class on the same data with `ayna select` before trusting a single scan's
+verdict.
+
+## What ayna does not do
+
+- It does not train, fit or tune a model.
+- It cannot prove a model's dynamics are right. It can only rule out specific
+  ways they are wrong.
+- It has no DSA or Lyapunov comparison yet. Those need a dynamics callable for
+  both the true and the inferred system, and are planned for tier 2.
+- The linear metrics assume CtD's linear-exponential observation model.
+  `NONLINEAR_READOUT` tells you when that assumption fails, and a nonlinear
+  fallback then runs instead.
+
+## Roadmap
+
+- **0.2** — validate on CtD's own sweeps (NODE latent sizes, LFADS KL
+  penalty), calibrate the thresholds per model class with leave-one-task-out
+  testing, and add a tier-1 dynamics wrapper for CtD models.
+- **0.3** — readers for real recordings (NWB / Neural Latents Benchmark),
+  plus multi-seed consistency.
+- **Later** — `ayna design`: how many neurons and trials a recording needs
+  before the dynamics become recoverable at all.
+
+## Citation
+
+ayna ports metrics and failure-mode definitions from:
+
+> Versteeg C, McCart JD, Ostrow M, et al. (2026) Computation-through-Dynamics
+> Toolkit: Simulated datasets and quality metrics for dynamical models of neural
+> activity. *PLOS Comput Biol* 22(10): e1014755.
+> https://doi.org/10.1371/journal.pcbi.1014755
+
+If you use ayna, please cite that paper.
+
+## Related
+
+Part of a small family of pre-flight tools by the same author:
+[daftar](https://pypi.org/project/daftar/) (provenance),
+[raftaar](https://pypi.org/project/raftaar/) (robot demonstration datasets),
+[miras](https://pypi.org/project/miras/) (identifiability of cultural-evolution
+designs), [tarjuman](https://pypi.org/project/tarjuman/) (NeuroML → Jaxley) and
+[baghban](https://pypi.org/project/baghban/) (Bonsai workflows).
+
+Research prototype, alpha. Apache 2.0.
