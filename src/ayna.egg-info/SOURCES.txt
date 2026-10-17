@@ -1,5 +1,12 @@
+CHANGELOG.md
+INSTALL.md
 LICENSE
+MANIFEST.in
+PUBLISHING.md
 README.md
+ROADMAP.md
+TESTING.md
+VALIDATION.md
 pyproject.toml
 src/ayna/__init__.py
 src/ayna/bundle.py
@@ -21,3 +28,9 @@ src/ayna.egg-info/top_level.txt
 src/ayna/adapters/__init__.py
 src/ayna/adapters/ctd.py
 tests/test_ayna.py
+tests/test_ctd_live.py
+validation/ctd_lfads_sweep.txt
+validation/ctd_node_sweep.txt
+validation/ctd_walkthrough_metrics.json
+validation/synthetic_seed0.txt
+validation/synthetic_seed7.txt
