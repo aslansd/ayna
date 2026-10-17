@@ -1,0 +1,24 @@
+85 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+DYNAMICAL_MISATTRIBUTION       0    5    0    0   30       1.00    1.00
+DYNAMICAL_MISATTRIBUTION       1    5    0    0   30       1.00    1.00
+FEATURE_INVENTION              0   14    0    0   71       1.00    1.00
+INPUT_INHERITED_STRUCTURE      0   10    0    0   10       1.00    1.00
+NONLINEAR_READOUT              0   10    0    0   75       1.00    1.00
+UNDERFITTING                   0   13    2    2   68       0.87    0.87
+
+rank agreement with ground truth (Spearman)
+metric                  truth          n     rho  expected
+recoverable_fraction    rate_r2       85   -0.53  negative
+cycle_consistency       state_r2      85    0.49  positive
+input_leakage_r2        input_r2      35   -0.60  negative
+rollout_gap             input_r2      35   -0.32  negative
+
+disagreements
+  underfit_inferred_0                UNDERFITTING tier 0: flagged (truth: absent)
+  underfit_inferred_1                UNDERFITTING tier 0: flagged (truth: absent)
+  nonlinear_readout_noinput_1        UNDERFITTING tier 0: missed (truth: present)
+  nonlinear_readout_noinput_8        UNDERFITTING tier 0: missed (truth: present)
+
+caveat: these faults were injected by ayna's own simulator, so this measures whether the detectors work as designed -- not whether they transfer to trained models or recordings.

@@ -24,8 +24,11 @@ from .report import Check, Finding, Report
 
 @dataclass
 class Thresholds:
-    underfit_residual_ratio: float = 1.25   # residual top eigenvalue / null 95th percentile
+    underfit_recoverable: float = 0.005     # recoverable info as a fraction of the model's own bits/spike
+    underfit_recoverable_error: float = 0.02
+    underfit_recoverable_z: float = 3.0     # and the per-trial gain must be this many SEs above zero
     underfit_baseline_margin: float = 0.0   # co-BPS must beat the reference model by this
+    underfit_residual_ratio: float = 1.25   # evidence only since 0.2: shared residual vs shuffled null
     invention_cycle_warning: float = 0.90
     invention_cycle_error: float = 0.70
     invention_pc_r2: float = 0.50           # latent PCs below this are "not in the rates"
@@ -110,15 +113,25 @@ class _Context:
     def underfitting(self):
         b, th = self.b, self.th
         signals, evidence, where = [], {}, []
+        rec = P.recoverable_information(b, seed=self.seed)
+        frac = rec["recoverable_fraction"]
+        self.m["recoverable_fraction"] = frac
+        evidence.update(rec)
         res = P.residual_structure(b, seed=self.seed)
         self.m["residual_ratio"] = res["residual_ratio"]
         evidence.update(res)
-        if res["residual_ratio"] > th.underfit_residual_ratio:
-            lo, hi = res["residual_peak_bins"]
+        severe = False
+        self.m["recoverable_z"] = rec["recoverable_z"]
+        if frac > th.underfit_recoverable and rec["recoverable_z"] >= th.underfit_recoverable_z:
+            severe = frac > th.underfit_recoverable_error
             signals.append(
-                f"validation residuals share a slow component {res['residual_ratio']:.2f}x larger than "
-                f"chance (95th percentile of shuffled residuals)")
-            where.append(f"bins {lo}-{hi} of the trial; neurons {', '.join(map(str, res['residual_top_neurons']))} load most")
+                f"other neurons' spikes still improve its predictions by {rec['recoverable_bits_per_spike']*1000:.2f} "
+                f"millibits/spike ({frac:.1%} of the model's own {rec['recoverable_reference_bps']:.3f} bits/spike; "
+                f"{rec['recoverable_split']}, trial-shuffled control subtracted, z = {rec['recoverable_z']:.1f})")
+            if res["residual_ratio"] > th.underfit_residual_ratio:
+                lo, hi = res["residual_peak_bins"]
+                where.append(f"bins {lo}-{hi} of the trial; neurons "
+                             f"{', '.join(map(str, res['residual_top_neurons']))} carry most of the shared residual")
         if b.heldout is not None:
             cobps = M.bits_per_spike(b.flat("rates", "val", b.heldout), b.flat("spikes", "val", b.heldout))
             base = P.baseline_co_bps(b, seed=self.seed)
@@ -130,16 +143,19 @@ class _Context:
                     f"co-BPS {cobps:.3f} does not beat a smoothed-spikes Poisson GLM "
                     f"({base['baseline_co_bps']:.3f})")
         else:
-            self.skip("UNDERFITTING/co-BPS", 0, "no held-out neurons marked, so co-BPS and the baseline comparison cannot run")
+            self.skip("UNDERFITTING/co-BPS", 0, "no held-out neurons marked, so co-BPS and the baseline "
+                      "comparison cannot run (recoverable information used a neuron split instead)")
         flagged = bool(signals)
         if flagged:
-            sev = "error" if len(signals) > 1 else "warning"
+            sev = "error" if severe or len(signals) > 1 else "warning"
             self.f.append(Finding(
                 "UNDERFITTING", sev, 0,
-                what=("The model misses shared structure that the spikes contain: " + "; ".join(signals) + "."),
+                what=("The spikes contain shared structure the model does not use: " + "; ".join(signals) + "."),
                 where="; ".join(where),
                 fix=("Increase capacity (latent size, generator units) or relax regularisation. If a "
-                     "larger model only helps by inventing features, compare with `ayna select`."),
+                     "larger model only helps by inventing features, compare with `ayna select`. "
+                     "Models without stochastic inputs cannot follow noise-driven fluctuations of the "
+                     "circuit, so a small residual can persist at any size."),
                 evidence=evidence))
         self.check("UNDERFITTING", 0, flagged)
 
@@ -161,6 +177,24 @@ class _Context:
                 return
         bad = [i for i in range(len(per_pc)) if per_pc[i] < th.invention_pc_r2 and share[i] >= th.min_pc_share]
         bad_share = float(np.sum(share[bad])) if bad else 0.0
+        bottleneck = b.meta.get("readout_bottleneck")
+        if bottleneck and int(bottleneck) < b.n_latents:
+            # e.g. LFADS: generator state -> low-dimensional factors -> rates. Directions outside the
+            # factor space are silent by design, so absolute cycle-consistency is not comparable to
+            # models without a bottleneck (CtD reports 0.3-0.5 for well-behaved LFADS models).
+            self.f.append(Finding(
+                "FEATURE_INVENTION", "info", 0,
+                what=(f"Linear cycle-consistency is {score:.2f}, but this model reads its {b.n_latents} latent "
+                      f"dimensions out through a {int(bottleneck)}-dimensional bottleneck, so directions outside "
+                      "it are silent by design and the absolute value has no calibrated meaning. Compare "
+                      "models of the same architecture on the same data with `ayna select`."),
+                evidence={"cycle_consistency": score, "readout_bottleneck": int(bottleneck),
+                          "per_pc_r2": [float(x) for x in per_pc],
+                          "pc_variance_share": [float(x) for x in share]}))
+            self.skip("FEATURE_INVENTION", 0, f"readout bottleneck ({int(bottleneck)} < {b.n_latents} latents): "
+                      "cycle-consistency is comparative only")
+            self.check("READOUT_NULLSPACE", 0, True)
+            return
         flagged = score < th.invention_cycle_warning
         if flagged:
             sev = "error" if score < th.invention_cycle_error else "warning"
@@ -206,8 +240,9 @@ class _Context:
             hit = leak["input_leakage_r2"] > th.leakage_r2
             if hit:
                 dims = [i for i, v in enumerate(leak["input_leakage_per_dim"]) if v > th.leakage_r2]
-                signals.append(("leakage", f"the latent state at the same instant predicts the inferred inputs "
-                                f"(R² {leak['input_leakage_r2']:.2f}; input dims {', '.join(map(str, dims))})"))
+                signals.append(("leakage", f"the latent state one step *before* each input predicts it "
+                                f"(R² {leak['input_leakage_r2']:.2f} from {leak['input_leakage_pcs']} latent PCs; "
+                                f"input dims {', '.join(map(str, dims))})"))
             self.check(det, 0, hit)
         elif b.inputs is None:
             self.skip(det, 0, "bundle has no inputs; models without inferred inputs cannot misattribute to them")
@@ -223,6 +258,7 @@ class _Context:
             if roll:
                 self.m["rollout_r2_autonomous"] = roll["rollout_r2_autonomous"]
                 self.m["rollout_r2_hold"] = roll["rollout_r2_hold"]
+                self.m["rollout_gap"] = roll["rollout_r2_hold"] - roll["rollout_r2_autonomous"]
                 evidence.update(roll)
                 gap = roll["rollout_r2_hold"] - roll["rollout_r2_autonomous"]
                 hit = roll["rollout_r2_hold"] >= th.rollout_hold_min and gap > th.rollout_gap
@@ -232,7 +268,8 @@ class _Context:
                                     f"{roll['rollout_r2_hold']:.2f} for simply holding it"))
                     fp = P.zero_input_fixed_points(b, seed=self.seed)
                     evidence.update(fp)
-                    evidence["occupied_regions"] = P.occupied_clusters(b, seed=self.seed)
+                    if fp.get("fixed_points") is not None:
+                        evidence["occupied_regions"] = P.occupied_clusters(b, seed=self.seed)
                 self.check(det, 1, hit)
         else:
             self.skip(det, 1, "no dynamics callable attached (Python API only: load_bundle(path, dynamics=f))")
@@ -240,7 +277,7 @@ class _Context:
         if signals:
             sev = "error" if len(signals) > 1 else "warning"
             extra = ""
-            if "stable_fixed_points" in evidence:
+            if evidence.get("stable_fixed_points") is not None and "occupied_regions" in evidence:
                 extra = (f" Zero-input dynamics have {evidence['stable_fixed_points']} stable fixed point(s) "
                          f"while the latent state dwells in about {evidence['occupied_regions']} region(s).")
             self.f.append(Finding(

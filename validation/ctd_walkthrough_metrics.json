@@ -1,0 +1,328 @@
+{
+ "ayna_version": "0.2.0",
+ "ctd_version": "1.0.2 (commit 051e11e)",
+ "teacher": "examples/walkthrough_models/tt_3bff",
+ "runs": [
+  {
+   "sweep": "node_sweep",
+   "run": "prefix=tt_3bff_latent_size=16_max_epochs=1000_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.0023279839945742585,
+    "residual_ratio": 1.4834130032242805,
+    "recoverable_z": 7.507050985581444,
+    "co_bps": 0.11405676244377193,
+    "baseline_co_bps": 0.10089153687863892,
+    "cycle_consistency": 0.8703854084014893,
+    "rollout_r2_autonomous": 0.7138314843177795,
+    "rollout_r2_hold": 0.67155921459198,
+    "rollout_gap": -0.04227226972579956,
+    "input_filter_r2": 0.09179421468917962,
+    "rate_r2": 0.9091324210166931,
+    "state_r2": 0.8509714007377625,
+    "recovery_r2": 0.9102161526679993,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "flags": [
+    "FEATURE_INVENTION"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION"
+   ]
+  },
+  {
+   "sweep": "node_sweep",
+   "run": "prefix=tt_3bff_latent_size=32_max_epochs=1000_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.002230699424130088,
+    "residual_ratio": 1.4925259603906005,
+    "recoverable_z": 8.04522230948443,
+    "co_bps": 0.11386320401079326,
+    "baseline_co_bps": 0.10089153687863892,
+    "cycle_consistency": 0.6336228251457214,
+    "rollout_r2_autonomous": 0.7804130911827087,
+    "rollout_r2_hold": 0.7640637755393982,
+    "rollout_gap": -0.016349315643310547,
+    "input_filter_r2": 0.06304504110767026,
+    "rate_r2": 0.9104043841362,
+    "state_r2": 0.64748215675354,
+    "recovery_r2": 0.9114933609962463,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "flags": [
+    "FEATURE_INVENTION"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION"
+   ]
+  },
+  {
+   "sweep": "node_sweep",
+   "run": "prefix=tt_3bff_latent_size=3_max_epochs=1000_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.009775988503218369,
+    "residual_ratio": 1.5839439278772411,
+    "recoverable_z": 18.370438710888173,
+    "co_bps": 0.10427518795772216,
+    "baseline_co_bps": 0.10089153687863892,
+    "cycle_consistency": 1.0,
+    "rollout_r2_autonomous": 0.6790875792503357,
+    "rollout_r2_hold": 0.667540967464447,
+    "rollout_gap": -0.011546611785888672,
+    "input_filter_r2": 0.0988987895026665,
+    "rate_r2": 0.8480490446090698,
+    "state_r2": 0.962129533290863,
+    "recovery_r2": 0.8497210144996643,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "flags": [
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "node_sweep",
+   "run": "prefix=tt_3bff_latent_size=5_max_epochs=1000_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.0050512677127655115,
+    "residual_ratio": 1.400242941564135,
+    "recoverable_z": 11.977641271139907,
+    "co_bps": 0.11222745044117133,
+    "baseline_co_bps": 0.10089153687863892,
+    "cycle_consistency": 1.0,
+    "rollout_r2_autonomous": 0.6633079051971436,
+    "rollout_r2_hold": 0.6137712597846985,
+    "rollout_gap": -0.04953664541244507,
+    "input_filter_r2": 0.12263321151233807,
+    "rate_r2": 0.8906697034835815,
+    "state_r2": 0.9728741645812988,
+    "recovery_r2": 0.8904293179512024,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "flags": [
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "node_sweep",
+   "run": "prefix=tt_3bff_latent_size=64_max_epochs=1000_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.002077126468525576,
+    "residual_ratio": 1.3653135988517646,
+    "recoverable_z": 7.994396038094216,
+    "co_bps": 0.1154867063550846,
+    "baseline_co_bps": 0.10089153687863892,
+    "cycle_consistency": 0.6107404232025146,
+    "rollout_r2_autonomous": 0.8167452216148376,
+    "rollout_r2_hold": 0.7994334101676941,
+    "rollout_gap": -0.017311811447143555,
+    "input_filter_r2": 0.052453794103756626,
+    "rate_r2": 0.9195280075073242,
+    "state_r2": 0.5615071654319763,
+    "recovery_r2": 0.9166359305381775,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "flags": [
+    "FEATURE_INVENTION"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION"
+   ]
+  },
+  {
+   "sweep": "node_sweep",
+   "run": "prefix=tt_3bff_latent_size=8_max_epochs=1000_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.0031310630692746207,
+    "residual_ratio": 1.5148816595213044,
+    "recoverable_z": 8.2890369759368,
+    "co_bps": 0.11309059021000469,
+    "baseline_co_bps": 0.10089153687863892,
+    "cycle_consistency": 1.0,
+    "rollout_r2_autonomous": 0.6528609991073608,
+    "rollout_r2_hold": 0.5726696848869324,
+    "rollout_gap": -0.08019131422042847,
+    "input_filter_r2": 0.1313405505099506,
+    "rate_r2": 0.9083719253540039,
+    "state_r2": 0.9587926864624023,
+    "recovery_r2": 0.9070359468460083,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "flags": [],
+   "ground_truth_flags": []
+  },
+  {
+   "sweep": "inputinf_sweep",
+   "run": "kl_co_scale=0_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.0012430313067972084,
+    "residual_ratio": 1.0514072853986303,
+    "recoverable_z": 14.810270723180793,
+    "cycle_consistency": 0.466683566570282,
+    "input_leakage_r2": 0.8972350358963013,
+    "rollout_r2_autonomous": 0.13631826639175415,
+    "rollout_r2_hold": 0.5885619521141052,
+    "rollout_gap": 0.4522436857223511,
+    "rate_r2": 0.8947896957397461,
+    "state_r2": 0.9093914031982422,
+    "recovery_r2": 0.8853994011878967,
+    "input_r2": 0.03616928309202194
+   },
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "inputinf_sweep",
+   "run": "kl_co_scale=1.00E-02_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.004004253587612207,
+    "residual_ratio": 1.2805611404690789,
+    "recoverable_z": 23.370524434844278,
+    "cycle_consistency": 0.29383912682533264,
+    "input_leakage_r2": 0.3568147122859955,
+    "rollout_r2_autonomous": -0.6796409487724304,
+    "rollout_r2_hold": 0.6985060572624207,
+    "rollout_gap": 1.378147006034851,
+    "rate_r2": 0.8646669387817383,
+    "state_r2": 0.8609673380851746,
+    "recovery_r2": 0.862407386302948,
+    "input_r2": 0.0018162811174988747
+   },
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "inputinf_sweep",
+   "run": "kl_co_scale=1.00E-03_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.003092730066785279,
+    "residual_ratio": 1.2078484587842466,
+    "recoverable_z": 21.071254392681553,
+    "cycle_consistency": 0.4117531180381775,
+    "input_leakage_r2": 0.20575085282325745,
+    "rollout_r2_autonomous": 0.4362733066082001,
+    "rollout_r2_hold": 0.6335934996604919,
+    "rollout_gap": 0.19732019305229187,
+    "rate_r2": 0.8813915848731995,
+    "state_r2": 0.8973320126533508,
+    "recovery_r2": 0.8760829567909241,
+    "input_r2": 0.11349299550056458
+   },
+   "flags": [
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "inputinf_sweep",
+   "run": "kl_co_scale=1.00E-04_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.001510278657073425,
+    "residual_ratio": 1.0584239629459566,
+    "recoverable_z": 16.087221786203116,
+    "cycle_consistency": 0.3901445269584656,
+    "input_leakage_r2": 0.26646414399147034,
+    "rollout_r2_autonomous": 0.5835504531860352,
+    "rollout_r2_hold": 0.5689187049865723,
+    "rollout_gap": -0.01463174819946289,
+    "rate_r2": 0.8918061852455139,
+    "state_r2": 0.8928830027580261,
+    "recovery_r2": 0.8838626146316528,
+    "input_r2": 0.2057594358921051
+   },
+   "flags": [
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "inputinf_sweep",
+   "run": "kl_co_scale=1.00E-05_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.0011493383094874016,
+    "residual_ratio": 1.0438006931608057,
+    "recoverable_z": 14.375204912970105,
+    "cycle_consistency": 0.4650726616382599,
+    "input_leakage_r2": 0.749366283416748,
+    "rollout_r2_autonomous": 0.4172916114330292,
+    "rollout_r2_hold": 0.5656399130821228,
+    "rollout_gap": 0.14834830164909363,
+    "rate_r2": 0.8955917358398438,
+    "state_r2": 0.9000326991081238,
+    "recovery_r2": 0.8855105042457581,
+    "input_r2": 0.08355952799320221
+   },
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "inputinf_sweep",
+   "run": "kl_co_scale=1.00E-06_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.001147246689087609,
+    "residual_ratio": 1.0454538317360986,
+    "recoverable_z": 14.39336634834395,
+    "cycle_consistency": 0.46349310874938965,
+    "input_leakage_r2": 0.8891551494598389,
+    "rollout_r2_autonomous": 0.16341301798820496,
+    "rollout_r2_hold": 0.585946798324585,
+    "rollout_gap": 0.42253378033638,
+    "rate_r2": 0.8957168459892273,
+    "state_r2": 0.9077680706977844,
+    "recovery_r2": 0.8861068487167358,
+    "input_r2": 0.03896886482834816
+   },
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "UNDERFITTING"
+   ]
+  }
+ ]
+}

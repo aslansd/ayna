@@ -227,3 +227,106 @@ def test_ctd_adapter_duck_typed():
     assert b.inputs_kind == "inferred"
     assert b.true_latents.shape == (20, 30, 64)
     assert b.trial_lens is None  # all full length
+
+
+# ================================================================ 0.2 additions
+def test_recoverable_information_separates_underfit():
+    from ayna import probes as P
+
+    clean = P.recoverable_information(synth("c", [], seed=11, **SMALL))
+    under = P.recoverable_information(synth("u", ["underfit=0.8"], seed=11, **SMALL))
+    th = Thresholds()
+
+    def flagged(r):
+        return r["recoverable_fraction"] > th.underfit_recoverable and r["recoverable_z"] >= th.underfit_recoverable_z
+
+    assert not flagged(clean)  # small recording: fraction can exceed 0.5% by chance, z cannot
+    assert flagged(under)
+    assert under["recoverable_split"] == "held-in -> held-out"
+
+
+def test_recoverable_information_without_heldout_uses_neuron_split():
+    from ayna import probes as P
+
+    b = synth("u", ["underfit=0.8"], seed=12, **SMALL)
+    b.heldout = None
+    rec = P.recoverable_information(b)
+    assert rec["recoverable_split"].startswith("neuron halves")
+    assert rec["recoverable_fraction"] > 0.005
+
+
+def test_leakage_uses_preceding_state():
+    """Latents that contain the current input must not look like misattribution."""
+    from ayna import probes as P
+
+    b = synth("c", [], seed=13, **SMALL)
+    b.latents = np.concatenate([b.latents, 3.0 * b.inputs], axis=2)  # z_t carries u_t (as in LFADS)
+    leak = P.input_leakage(b)
+    assert leak["input_leakage_same_instant_r2"] > 0.9
+    assert leak["input_leakage_r2"] < 0.5
+
+
+def test_bottleneck_makes_invention_comparative():
+    b = synth("lf", ["feature_invention=0.4"], seed=14, **SMALL)
+    b.meta["readout_bottleneck"] = 3
+    r = scan(b)
+    assert ("FEATURE_INVENTION", 0) in {(c.id, c.tier) for c in r.checks if c.status == "not_assessed"}
+    f = next(f for f in r.findings if f.id == "FEATURE_INVENTION" and f.tier == 0)
+    assert f.severity == "info" and "bottleneck" in f.what
+
+
+def test_select_never_recommends_leaky_models():
+    from ayna.select import select_from_rows
+
+    rows = [
+        {"name": "kl0", "recon": 0.130, "cycle": 0.47, "recon_metric": "val_bps", "input_leakage_r2": 0.89},
+        {"name": "kl4", "recon": 0.125, "cycle": 0.39, "recon_metric": "val_bps", "input_leakage_r2": 0.25},
+        {"name": "kl3", "recon": 0.120, "cycle": 0.41, "recon_metric": "val_bps", "input_leakage_r2": 0.20},
+        {"name": "kl2", "recon": 0.118, "cycle": 0.29, "recon_metric": "val_bps", "input_leakage_r2": 0.35},
+    ]
+    rep = select_from_rows(rows)
+    assert rep.knee == "kl4"
+    assert rep.excluded == ["kl0"]
+    assert any(f.id == "MISATTRIBUTION_EXCLUDED" for f in rep.findings)
+
+
+def test_select_labels_show_the_varying_part():
+    from ayna.select import _distinct
+
+    names = [f"prefix=tt_3bff_latent_size={k}_max_epochs=1000_seed=0" for k in (3, 8, 64)]
+    assert _distinct(names)[names[1]] == "tt_3bff_latent_size=8"
+
+
+def test_ctd_adapter_tolerates_ctd_quirks():
+    from ayna.adapters.ctd import from_ctd
+
+    class Quirky(_FakeDD):
+        evaluated = False
+
+        class model:  # noqa: N801 - mimics dd.model
+            class hparams:
+                fac_dim = 2
+
+            @classmethod
+            def eval(cls):
+                Quirky.evaluated = True
+
+        def get_trial_lens(self, phase):  # CtD returns zeros for fixed-length data
+            return np.zeros(len(self.d[phase]["rates"]))
+
+        def get_true_rates(self, phase):  # some CtD datamodules raise here
+            raise IndexError("list index out of range")
+
+    b = from_ctd(Quirky(), _FakeTT(), with_dynamics=False)
+    assert b.trial_lens is None
+    assert b.true_rates is None
+    assert Quirky.evaluated
+    assert b.meta["readout_bottleneck"] == 2
+
+
+def test_lfs_pointer_stubs_get_a_clear_error(tmp_path):
+    from ayna.adapters.ctd import check_lfs
+
+    (tmp_path / "model.pkl").write_text("version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 10\n")
+    with pytest.raises(FileNotFoundError, match="Git LFS pointer"):
+        check_lfs(tmp_path)

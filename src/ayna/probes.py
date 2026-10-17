@@ -26,8 +26,13 @@ def lagged(arr: np.ndarray, n_lags: int) -> np.ndarray:
     return out
 
 
-def poisson_glm_predict(X_fit, Y_fit, X_eval, l2: float = 1e-3, iters: int = 25):
-    """Independent Poisson GLMs (log link, ridge) for every column of ``Y_fit``, by Newton's method."""
+def poisson_glm_predict(X_fit, Y_fit, X_eval, l2: float = 1e-3, iters: int = 25,
+                        offset_fit=None, offset_eval=None):
+    """Independent Poisson GLMs (log link, ridge) for every column of ``Y_fit``, by Newton's method.
+
+    ``offset_fit`` / ``offset_eval`` (same shape as ``Y``) are fixed log-rate
+    offsets: the GLM then learns only what the features add on top of them.
+    """
     mu, sd = X_fit.mean(0), X_fit.std(0) + 1e-12
     Xf = np.c_[np.ones(len(X_fit)), (X_fit - mu) / sd]
     Xe = np.c_[np.ones(len(X_eval)), (X_eval - mu) / sd]
@@ -37,17 +42,20 @@ def poisson_glm_predict(X_fit, Y_fit, X_eval, l2: float = 1e-3, iters: int = 25)
     pred = np.empty((len(X_eval), Y_fit.shape[1]))
     for j in range(Y_fit.shape[1]):
         y = Y_fit[:, j].astype(float)
+        o_f = 0.0 if offset_fit is None else offset_fit[:, j]
+        o_e = 0.0 if offset_eval is None else offset_eval[:, j]
         w = np.zeros(P_)
-        w[0] = np.log(max(y.mean(), 1e-6))
+        if offset_fit is None:
+            w[0] = np.log(max(y.mean(), 1e-6))
         for _ in range(iters):
-            lam = np.exp(np.clip(Xf @ w, -20, 20))
+            lam = np.exp(np.clip(o_f + Xf @ w, -20, 20))
             grad = Xf.T @ (y - lam) - reg @ w
             hess = (Xf * lam[:, None]).T @ Xf + reg
             step = np.linalg.solve(hess, grad)
             w += step
             if np.max(np.abs(step)) < 1e-6:
                 break
-        pred[:, j] = np.exp(np.clip(Xe @ w, -20, 20))
+        pred[:, j] = np.exp(np.clip(o_e + Xe @ w, -20, 20))
     return pred
 
 
@@ -88,6 +96,81 @@ def baseline_co_bps(b: Bundle, sigmas=(1.0, 2.0, 4.0), n_pcs: int = 10, seed: in
     best = max(scores, key=lambda s: -np.inf if np.isnan(scores[s]) else scores[s])
     value = fit_eval(feats_all[best], b.trials("train"), b.trials("val"))
     return {"baseline_co_bps": value, "baseline_sigma_bins": best}
+
+
+def recoverable_information(b: Bundle, sigma: float = 2.0, n_pcs: int = 10, l2: float = 1e-2,
+                            seed: int = 0) -> dict:
+    """Information about one set of neurons, present in another set's spikes, that the model left unused.
+
+    For each target neuron, a Poisson GLM takes the model's own log-rate as a
+    fixed offset and adds smoothed, square-rooted spikes of *source* neurons as
+    features. The gain in validation bits per spike over the model alone is
+    information the data carry and the model missed. Poisson noise is
+    independent across neurons, so source spikes cannot predict target noise.
+
+    The same fit with source features taken from *other trials* (shuffled
+    trial identity, same time structure) is subtracted, so per-neuron gain or
+    time-locked corrections do not count as recoverable information.
+
+    Source/target: held-in -> held-out when held-out neurons exist; otherwise
+    two random halves of the neurons, both directions, averaged.
+    """
+    rng = np.random.default_rng(seed)
+    N = b.n_neurons
+    if b.heldout is not None:
+        pairs = [(np.where(b.heldin)[0], np.where(b.heldout)[0])]
+        split = "held-in -> held-out"
+    else:
+        perm = rng.permutation(N)
+        a, c = np.sort(perm[: N // 2]), np.sort(perm[N // 2:])
+        pairs = [(a, c), (c, a)]
+        split = "neuron halves, both directions"
+    tr, va = b.bin_mask("train"), b.bin_mask("val")
+    shuffle = np.arange(b.n_trials)
+    trn, van = np.where(b.trials("train"))[0], np.where(b.trials("val"))[0]
+    shuffle[trn] = rng.permutation(trn)
+    shuffle[van] = rng.permutation(van)
+    trial_of_sample = np.nonzero(va)[0]
+    gains, controls, model_bps, n_spikes = [], [], [], []
+    per_trial_net = np.zeros(b.n_trials)
+    for src, tgt in pairs:
+        feat = np.sqrt(gaussian_filter1d(b.spikes[:, :, src].astype(float), sigma, axis=1))
+        Y_tr = b.spikes[:, :, tgt][tr].astype(float)
+        Y_va = b.spikes[:, :, tgt][va].astype(float)
+        O_tr = np.log(np.maximum(b.rates[:, :, tgt][tr], 1e-9))
+        O_va = np.log(np.maximum(b.rates[:, :, tgt][va], 1e-9))
+        base = np.exp(O_va)
+        ll_base = np.sum(Y_va * O_va - base, axis=1)
+        nsp = Y_va.sum()
+        out = []
+        for f in (feat, feat[shuffle]):
+            k = min(n_pcs, len(src))
+            pca = PCA(k).fit(f[tr][:: max(1, int(tr.sum()) // 50000)])
+            pred = poisson_glm_predict(pca.transform(f[tr]), Y_tr, pca.transform(f[va]), l2=l2,
+                                       offset_fit=O_tr, offset_eval=O_va)
+            out.append(np.sum(Y_va * np.log(pred) - pred, axis=1) - ll_base)   # per-sample LL gain
+        gains.append(out[0].sum() / (nsp * np.log(2)))
+        controls.append(out[1].sum() / (nsp * np.log(2)))
+        per_trial_net += np.bincount(trial_of_sample, weights=out[0] - out[1], minlength=b.n_trials)
+        model_bps.append(bits_per_spike(base, Y_va))
+        n_spikes.append(nsp)
+    w = np.asarray(n_spikes) / np.sum(n_spikes)
+    gain = float(np.dot(w, gains))
+    control = float(np.dot(w, controls))
+    mbps = float(np.dot(w, model_bps))
+    net = gain - control
+    # paired across validation trials: is the net gain distinguishable from zero?
+    d = per_trial_net[b.trials("val")]
+    z = float(d.mean() / (d.std(ddof=1) / np.sqrt(len(d)))) if len(d) > 2 and d.std() > 0 else 0.0
+    return {
+        "recoverable_bits_per_spike": net,
+        "recoverable_gain_raw": gain,
+        "recoverable_gain_shuffled": control,
+        "recoverable_reference_bps": mbps,
+        "recoverable_fraction": net / mbps if mbps > 0 else float("nan"),
+        "recoverable_z": z,
+        "recoverable_split": split,
+    }
 
 
 def residual_structure(b: Bundle, sigma: float = 2.0, n_null: int = 50, seed: int = 0) -> dict:
@@ -160,32 +243,52 @@ def _peak_window(profile: np.ndarray, frac: float = 0.5) -> list:
 
 
 # ------------------------------------------------------------ input probes
-def input_leakage(b: Bundle) -> dict:
-    """How well do the inferred latents, at the same instant, predict the inferred inputs?
+def input_leakage(b: Bundle, lag: int = 1, var: float = 0.99, max_dims: int = 20) -> dict:
+    """How well does the latent state *before* each input predict that input?
 
-    External inputs should arrive from outside the circuit. When a model's
-    inferred inputs can be read off its own current state, the controller is
-    likely carrying dynamics the generator should own -- the pattern behind
-    CtD Fig 6B, where badly inferred inputs "resembled the state of the network".
+    A genuine external input arrives from outside the circuit, so the state
+    that precedes it should say little about it. When a model offloads its
+    dynamics to inferred inputs, the inputs become a function of the state --
+    the pattern behind CtD Fig 6B, where badly inferred inputs "resembled the
+    state of the network".
 
-    Caveat: in closed-loop tasks (e.g. sensory feedback of the model's own
-    output) true inputs legitimately depend on state.
+    The state at ``t - lag`` is used because most models update
+    ``z_t = f(z_{t-1}, u_t)``: the state at ``t`` already contains the input,
+    and with enough latent dimensions it can be decoded back from it (on
+    CtD's LFADS models, same-instant decoding gives R² 0.88-0.99 whether or
+    not the inputs are right). Latents are reduced to the PCs explaining
+    ``var`` of their variance (at most ``max_dims``) to keep the regression
+    honest in high dimensions; fit on training trials, scored on validation.
+
+    Caveat: in closed-loop tasks (sensory feedback of the model's own output)
+    true inputs legitimately depend on the preceding state.
     """
-    Z_tr, Z_va = b.flat("latents", "train"), b.flat("latents", "val")
-    U_tr, U_va = b.flat("inputs", "train"), b.flat("inputs", "val")
-    model = LinearRegression().fit(Z_tr, U_tr)
-    pred = model.predict(Z_va)
-    per_dim = np.atleast_1d(r2_score(U_va, pred, multioutput="raw_values"))
-    # temporal smoothness: lag-1 autocorrelation (pulses ~0, state-like ~1)
-    U = b.inputs - b.inputs.mean(axis=(0, 1), keepdims=True)
-    ac = np.sum(U[:, 1:] * U[:, :-1], axis=(0, 1)) / (np.sum(U**2, axis=(0, 1)) + 1e-12)
-    flat = U.reshape(-1, U.shape[2])
-    kurt = np.mean(flat**4, 0) / (np.mean(flat**2, 0) ** 2 + 1e-12) - 3
+    Z, U = b.latents, b.inputs
+    Zp = np.zeros_like(Z)
+    Zp[:, lag:] = Z[:, : Z.shape[1] - lag]
+    tr, va = b.bin_mask("train").copy(), b.bin_mask("val").copy()
+    tr[:, :lag] = False
+    va[:, :lag] = False
+    sub = max(1, int(tr.sum()) // 50000)
+    pca = PCA().fit(Zp[tr][::sub])
+    k = int(np.searchsorted(np.cumsum(pca.explained_variance_ratio_), var)) + 1
+    k = max(1, min(k, max_dims, Z.shape[2]))
+    pca = PCA(k).fit(Zp[tr][::sub])
+    model = Ridge(alpha=1.0).fit(pca.transform(Zp[tr]), U[tr])
+    pred = model.predict(pca.transform(Zp[va]))
+    per_dim = np.atleast_1d(r2_score(U[va], pred, multioutput="raw_values"))
+    # same-instant decoding, kept as evidence only
+    same = LinearRegression().fit(b.flat("latents", "train"), b.flat("inputs", "train"))
+    same_r2 = vw_r2(b.flat("inputs", "val"), same.predict(b.flat("latents", "val")))
+    Uc = U - U.mean(axis=(0, 1), keepdims=True)
+    ac = np.sum(Uc[:, 1:] * Uc[:, :-1], axis=(0, 1)) / (np.sum(Uc**2, axis=(0, 1)) + 1e-12)
     return {
-        "input_leakage_r2": vw_r2(U_va, pred),
+        "input_leakage_r2": vw_r2(U[va], pred),
         "input_leakage_per_dim": [float(x) for x in per_dim],
+        "input_leakage_lag": lag,
+        "input_leakage_pcs": k,
+        "input_leakage_same_instant_r2": same_r2,
         "input_autocorr_lag1": [float(x) for x in ac],
-        "input_excess_kurtosis": [float(x) for x in kurt],
     }
 
 
@@ -250,7 +353,7 @@ def autonomous_rollout(b: Bundle, horizon: int = 10, max_starts: int = 4000, see
 
 
 def zero_input_fixed_points(b: Bundle, n_starts: int = 256, steps: int = 400, lr: float = 0.05,
-                            tol: float = 1e-6, seed: int = 0) -> dict:
+                            tol: float = 1e-6, seed: int = 0, max_dims: int = 32) -> dict:
     """Fixed points of ``z -> f(z, 0)``, found by minimising ``q = |f(z,0) - z|^2 / 2``.
 
     Batched finite-difference gradients keep this framework-free. Stability
@@ -258,6 +361,9 @@ def zero_input_fixed_points(b: Bundle, n_starts: int = 256, steps: int = 400, lr
     """
     rng = np.random.default_rng(seed)
     f = b.dynamics
+    if b.n_latents > max_dims:
+        return {"fixed_points": None, "fixed_points_note":
+                f"not attempted: {b.n_latents} latent dims exceeds {max_dims} for the finite-difference search"}
     Zall = b.flat("latents", "val")
     U_dim = b.inputs.shape[2] if b.inputs is not None else 1
     z = Zall[rng.choice(len(Zall), min(n_starts, len(Zall)), replace=False)].astype(float)

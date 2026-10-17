@@ -1,0 +1,29 @@
+== select ==
+model                  latents    co_bps   cycle  stateR2  rateR2
+-----------------------------------------------------------------
+tt_3bff_latent_size=3        3    0.1043   1.000    0.962   0.848
+tt_3bff_latent_size=5        5    0.1122   1.000    0.973   0.891
+tt_3bff_latent_size=8        8    0.1131   1.000    0.959   0.908 <- recommended
+tt_3bff_latent_size=16      16    0.1141   0.870    0.851   0.909 *front
+tt_3bff_latent_size=32      32    0.1139   0.634    0.647   0.910
+tt_3bff_latent_size=64      64    0.1155   0.611    0.562   0.920 *front
+
+WARNING RECONSTRUCTION_TRAP
+  The best-reconstructing model prefix=tt_3bff_latent_size=64_max_epochs=1000_seed=0
+  gains +0.0024 co_bps over prefix=tt_3bff_latent_size=8_max_epochs=1000_seed=0 but its
+  cycle-consistency is 0.61 vs 1.00. Ranking by reconstruction alone would pick a model
+  whose extra latent structure the data do not constrain. Ground truth agrees: State R²
+  0.56 vs 0.96.
+
+== validation against the task-trained ground truth ==
+6 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    3    0    0    3       1.00    1.00
+INPUT_INHERITED_STRUCTURE      0    0    0    0    6        n/a     n/a
+UNDERFITTING                   0    2    0    0    4       1.00    1.00
+
+rank agreement with ground truth (Spearman)
+metric                  truth          n     rho  expected
+recoverable_fraction    rate_r2        6   -1.00  negative
+cycle_consistency       state_r2       6    0.94  positive

@@ -5,3 +5,9 @@ __pycache__/
 .DS_Store
 .env
 .ipynb_checkpoints/
+build/
+.pytest_cache/
+.mypy_cache/
+datasets/
+reports/
+ctd_reports/

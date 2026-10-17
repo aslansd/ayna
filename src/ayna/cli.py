@@ -6,6 +6,7 @@
     ayna validate [DIR] [--n 6] [--out DIR]
     ayna info BUNDLE
     ayna export-ctd DD_RUN_DIR OUT.npz --model-type SAE|LFADS [--tt TT_RUN_DIR]
+    ayna ctd SWEEP_DIR... --model-type SAE|LFADS [--tt TT_RUN_DIR] [--out DIR]
     ayna doctor
 
 ``scan`` exits 1 when an error-level finding is raised from the model's
@@ -161,6 +162,69 @@ def cmd_export_ctd(args):
     return 0
 
 
+def cmd_ctd(args):
+    """Scan every run of one or more CtD sweeps against a task-trained teacher, one subprocess per run."""
+    import subprocess
+
+    from .adapters.ctd import find_runs
+    from .select import select_from_rows
+    from .validate import Validation, case_from_report_json
+
+    runs = []
+    for path in args.runs:
+        found = find_runs(path)
+        if not found:
+            print(f"no CtD runs (model.pkl + datamodule.pkl) under {path}", file=sys.stderr)
+        runs += found
+    if not runs:
+        return 2
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    overrides = json.dumps(_overrides(args.set))
+    failed = []
+    for i, run in enumerate(runs, 1):
+        print(f"[{i}/{len(runs)}] {run.name}", flush=True)
+        cmd = [sys.executable, "-m", "ayna.adapters.ctd", str(run), args.model_type, "--out", str(out),
+               "--overrides", overrides]
+        if args.tt:
+            cmd += ["--tt", args.tt]
+        if args.save_bundles:
+            cmd.append("--save-bundle")
+        if args.no_dynamics:
+            cmd.append("--no-dynamics")
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            tail = (proc.stderr or proc.stdout).strip().splitlines()[-1:] or ["killed (out of memory?)"]
+            print(f"    failed: {tail[0]}", file=sys.stderr)
+            failed.append(run.name)
+            continue
+        res = json.loads(proc.stdout.strip().splitlines()[-1])
+        print(f"    flags: {', '.join(res['flags']) or 'none'}" + (f" | ground truth: {', '.join(res['truth']) or 'none'}"
+                                                                  if args.tt else ""), flush=True)
+
+    reports = sorted(out.glob("*/report.json"))
+    names = {r.name for r in runs}
+    reports = [r for r in reports if r.parent.name in names]
+    summary = []
+    rows = [json.loads((r.parent / "select_row.json").read_text()) for r in reports
+            if (r.parent / "select_row.json").exists()]
+    if len(rows) >= 2:
+        rep = select_from_rows(rows)
+        rep.save(out)
+        summary += ["== select ==", rep.render_text()]
+    if args.tt:
+        val = Validation([case_from_report_json(r) for r in reports])
+        val.save(out)
+        summary += ["== validation against the task-trained ground truth ==", val.render_text()]
+    if failed:
+        summary.append(f"failed runs: {', '.join(failed)}")
+    text = "\n".join(summary)
+    (out / "summary.txt").write_text(text)
+    print("\n" + text)
+    print(f"per-run reports, select and validation written to {out}/")
+    return 1 if failed else 0
+
+
 def cmd_doctor(args):
     import platform
 
@@ -230,6 +294,16 @@ def build_parser():
     s.add_argument("--tt", help="task-trained run directory, for ground truth")
     s.add_argument("--inputs", choices=["supplied", "inferred"])
     s.set_defaults(fn=cmd_export_ctd)
+
+    s = sub.add_parser("ctd", help="scan and validate CtD sweeps in place (run inside the CtD environment)")
+    s.add_argument("runs", nargs="+", help="CtD run directories or sweep directories containing them")
+    s.add_argument("--model-type", required=True, choices=["SAE", "LFADS"])
+    s.add_argument("--tt", help="task-trained run directory, for ground truth")
+    s.add_argument("--out", default="ctd_reports")
+    s.add_argument("--save-bundles", action="store_true", help="also write each run as a bundle.npz (large)")
+    s.add_argument("--no-dynamics", action="store_true", help="skip tier-1 probes")
+    s.add_argument("--set", nargs="*", metavar="NAME=VALUE")
+    s.set_defaults(fn=cmd_ctd)
 
     s = sub.add_parser("doctor", help="report versions and optional extras")
     s.set_defaults(fn=cmd_doctor)

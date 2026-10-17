@@ -25,6 +25,14 @@ from .synth import make_model_outputs, make_truth
 DETECTORS = ("UNDERFITTING", "FEATURE_INVENTION", "DYNAMICAL_MISATTRIBUTION",
              "INPUT_INHERITED_STRUCTURE", "NONLINEAR_READOUT")
 
+# (ground-truth-free metric, ground-truth metric, expected sign of the rank correlation)
+PAIRS = (
+    ("UNDERFITTING", "recoverable_fraction", "rate_r2", -1),
+    ("FEATURE_INVENTION", "cycle_consistency", "state_r2", +1),
+    ("DYNAMICAL_MISATTRIBUTION", "input_leakage_r2", "input_r2", -1),
+    ("DYNAMICAL_MISATTRIBUTION", "rollout_gap", "input_r2", -1),
+)
+
 
 @dataclass
 class Validation:
@@ -44,6 +52,26 @@ class Validation:
                     cell[key] += 1
         return dict(out)
 
+    def correlations(self, min_cases: int = 4) -> list:
+        """Spearman rank agreement between each ground-truth-free metric and its ground truth.
+
+        Binary verdicts depend on where the truth line is drawn; rank agreement
+        does not, which matters on real models where every value sits near it.
+        """
+        from scipy.stats import spearmanr
+
+        out = []
+        for det, x, y, sign in PAIRS:
+            pts = [(c["metrics"][x], c["metrics"][y]) for c in self.cases
+                   if x in c["metrics"] and y in c["metrics"]
+                   and np.isfinite(c["metrics"][x]) and np.isfinite(c["metrics"][y])]
+            if len(pts) < min_cases:
+                continue
+            rho = float(spearmanr(*zip(*pts)).statistic)
+            out.append({"detector": det, "metric": x, "truth": y, "n": len(pts), "spearman": rho,
+                        "expected_sign": sign, "agrees": bool(np.sign(rho) == sign)})
+        return out
+
     def render_text(self) -> str:
         lines = [f"{len(self.cases)} bundles with ground truth", "",
                  f"{'detector':<27}{'tier':>5}{'TP':>5}{'FP':>5}{'FN':>5}{'TN':>5}{'precision':>11}{'recall':>8}"]
@@ -52,6 +80,14 @@ class Validation:
             rec = c["tp"] / (c["tp"] + c["fn"]) if c["tp"] + c["fn"] else float("nan")
             lines.append(f"{det:<27}{tier:>5}{c['tp']:>5}{c['fp']:>5}{c['fn']:>5}{c['tn']:>5}"
                          f"{_p(prec):>11}{_p(rec):>8}")
+        corr = self.correlations()
+        if corr:
+            lines += ["", "rank agreement with ground truth (Spearman)",
+                      f"{'metric':<24}{'truth':<12}{'n':>4}{'rho':>8}  expected"]
+            for c in corr:
+                lines.append(f"{c['metric']:<24}{c['truth']:<12}{c['n']:>4}{c['spearman']:>8.2f}  "
+                             f"{'negative' if c['expected_sign'] < 0 else 'positive'}"
+                             f"{'' if c['agrees'] else '  <- disagrees'}")
         misses = [c for c in self.cases if c["disagreements"]]
         if misses:
             lines += ["", "disagreements"]
@@ -63,7 +99,8 @@ class Validation:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         table = {f"{d}|tier{t}": c for (d, t), c in self.table().items()}
-        (out / "validation.json").write_text(json.dumps({"table": table, "cases": self.cases}, indent=2, default=float))
+        (out / "validation.json").write_text(json.dumps(
+            {"table": table, "correlations": self.correlations(), "cases": self.cases}, indent=2, default=float))
         (out / "validation.txt").write_text(self.render_text())
         return out
 
@@ -92,6 +129,19 @@ def _case_from_report(name, report, labels=None):
                                      f" (truth: {'present' if truth[det] else 'absent'})")
     return {"name": name, "truth": truth, "pred": pred, "disagreements": disagreements,
             "metrics": {k: float(v) for k, v in report.metrics.items() if isinstance(v, (int, float, np.floating))}}
+
+
+def case_from_report_json(path) -> dict:
+    """A validation case from a saved ``report.json`` (e.g. written by ``ayna ctd`` workers)."""
+    from .report import Check
+
+    data = json.loads(Path(path).read_text())
+
+    class _R:  # the two attributes _case_from_report reads
+        checks = [Check(**c) for c in data["checks"]]
+        metrics = data["metrics"]
+
+    return _case_from_report(data["name"], _R())
 
 
 def corpus_specs(n_per_fault: int = 6, seed: int = 0) -> list:
