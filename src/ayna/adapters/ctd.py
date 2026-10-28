@@ -111,6 +111,30 @@ def dynamics_from_ctd(dd, model_type: Optional[str] = None, latent_dim: Optional
                 ut = torch.cat([ut, torch.zeros(ut.shape[0], ext_dim, dtype=dtype, device=device)], dim=1)
             return cell(ut, zt).cpu().numpy()
 
+    def _pad(ut):
+        if ext_dim:
+            return torch.cat([ut, torch.zeros(ut.shape[0], ext_dim, dtype=dtype, device=device)], dim=1)
+        return ut
+
+    def vjp(z, u, v):
+        """J^T v for the Jacobian of f with respect to z (exact, by autograd)."""
+        with torch.enable_grad():
+            zt = torch.as_tensor(np.asarray(z), dtype=dtype, device=device).requires_grad_(True)
+            ut = _pad(torch.as_tensor(np.asarray(u), dtype=dtype, device=device))
+            out = cell(ut, zt)
+            (g,) = torch.autograd.grad(out, zt, grad_outputs=torch.as_tensor(np.asarray(v), dtype=dtype,
+                                                                               device=device))
+        return g.detach().cpu().numpy()
+
+    def jacobian(z, u):
+        """d f / d z at a single state, shape (D, D)."""
+        zt = torch.as_tensor(np.asarray(z), dtype=dtype, device=device)
+        ut = _pad(torch.as_tensor(np.asarray(u), dtype=dtype, device=device))
+        J = torch.autograd.functional.jacobian(lambda x: cell(ut, x), zt)
+        return J.reshape(zt.shape[1], zt.shape[1]).detach().cpu().numpy()
+
+    f.vjp = vjp
+    f.jacobian = jacobian
     note = f"{type(cell).__name__} from {model_type or 'model'}"
     if ext_dim:
         note += f" ({ext_dim} external input dims held at zero)"
@@ -128,9 +152,10 @@ def from_ctd(dd, tt=None, name: Optional[str] = None, inputs_kind: Optional[str]
     """
     model_type = model_type or getattr(dd, "model_type", "")
     parts = {k: [] for k in ("spikes", "rates", "latents", "inputs", "true_rates",
-                             "true_latents", "true_inputs", "trial_lens")}
+                             "true_latents", "true_inputs", "true_inputs_noiseless", "trial_lens")}
     n_heldin = None
     n_val = 0
+    trimmed, mismatched = set(), set()
     if inputs_kind is None:
         inputs_kind = "inferred" if model_type == "LFADS" and hasattr(dd, "get_inferred_inputs") else "supplied"
 
@@ -156,8 +181,26 @@ def from_ctd(dd, tt=None, name: Optional[str] = None, inputs_kind: Optional[str]
             lens = _get(dd, "get_trial_lens", phase, dtype=None)
             parts["trial_lens"].append(None if lens is None else lens.reshape(-1).astype(int))
             if tt is not None:
-                parts["true_latents"].append(_get(tt, "get_latents", phase))
-                parts["true_inputs"].append(_get(tt, "get_inputs", phase))
+                n_dd = rates.shape[0]
+                for key, getter in (("true_latents", "get_latents"), ("true_inputs", "get_inputs"),
+                                    ("true_inputs_noiseless", "get_true_inputs")):
+                    arr = _get(tt, getter, phase)
+                    if arr is not None and arr.shape[0] > n_dd:
+                        # dataset shrunk to a prefix of each split (experiments/ctd_tasks/shrink_dataset.py)
+                        trimmed.add(f"{phase}: teacher {arr.shape[0]} -> first {n_dd} trials")
+                        arr = arr[:n_dd]
+                    elif arr is not None and arr.shape[0] < n_dd:
+                        mismatched.add(f"{key} ({phase}: teacher {arr.shape[0]}, model {n_dd} trials)")
+                        arr = None
+                    trim = getattr(tt, "trim_inds", None)
+                    if (arr is not None and trim is not None and arr.shape[1] != rates.shape[1]
+                            and arr[:, trim[0] - 1: trim[1]].shape[1] == rates.shape[1]):
+                        # CtD's get_inputs applies the simulator's trim window; get_true_inputs does not
+                        arr = arr[:, trim[0] - 1: trim[1]]
+                    if arr is not None and arr.shape[1] != rates.shape[1]:
+                        mismatched.add(f"{key} ({phase}: teacher {arr.shape[1]} bins, model {rates.shape[1]})")
+                        arr = None
+                    parts[key].append(arr)
             if phase == "val":
                 n_val = rates.shape[0]
 
@@ -173,6 +216,11 @@ def from_ctd(dd, tt=None, name: Optional[str] = None, inputs_kind: Optional[str]
     val = np.zeros(R, bool)
     val[R - n_val:] = True
     notes = []
+    if trimmed:
+        notes.append("teacher trimmed to the model's trials, assuming a prefix-shrunk dataset: "
+                     + "; ".join(sorted(trimmed)))
+    if mismatched:
+        notes.append("ground truth dropped, teacher and model disagree: " + "; ".join(sorted(mismatched)))
     trial_lens = cat("trial_lens")
     if trial_lens is not None:
         if np.any(trial_lens <= 0) or np.any(trial_lens > T):
@@ -182,6 +230,11 @@ def from_ctd(dd, tt=None, name: Optional[str] = None, inputs_kind: Optional[str]
         elif np.all(trial_lens >= T):
             trial_lens = None
     inputs = cat("inputs")
+    noiseless = cat("true_inputs_noiseless")
+    true_in = cat("true_inputs")
+    if noiseless is not None and (true_in is None or noiseless.shape != true_in.shape):
+        notes.append("teacher's noiseless inputs do not match its inputs in shape; not used")
+        noiseless = None
     meta = {
         "name": name or getattr(dd, "run_name", "ctd_run"),
         "model": model_type or "unknown",
@@ -205,10 +258,24 @@ def from_ctd(dd, tt=None, name: Optional[str] = None, inputs_kind: Optional[str]
         meta["dynamics"] = why
     b = Bundle(spikes=spikes, rates=cat("rates"), latents=cat("latents"), heldout=heldout, val=val,
                trial_lens=trial_lens, inputs=inputs, true_rates=cat("true_rates"),
-               true_latents=cat("true_latents"), true_inputs=cat("true_inputs"), meta=meta,
-               dynamics=dynamics)
+               true_latents=cat("true_latents"), true_inputs=true_in, true_inputs_noiseless=noiseless,
+               meta=meta, dynamics=dynamics)
     b.notes.extend(notes)
     return b
+
+
+def _teacher_class(tt_dir, default):
+    """CtD has task-specific teacher analyses for MultiTask and RandomTarget."""
+    name = Path(str(tt_dir).rstrip("/")).name
+    if "MultiTask" in name:
+        from ctd.comparison.analysis.tt.tasks.tt_MultiTask import Analysis_TT_MultiTask
+
+        return Analysis_TT_MultiTask
+    if "RandomTarget" in name:
+        from ctd.comparison.analysis.tt.tasks.tt_RandomTarget import Analysis_TT_RandomTarget
+
+        return Analysis_TT_RandomTarget
+    return default
 
 
 def _require_ctd():
@@ -263,7 +330,7 @@ def load_run(dd_dir: str, model_type: str, tt_dir: Optional[str] = None, inputs_
     tt = None
     if tt_dir:
         tt_dir = str(tt_dir).rstrip("/") + "/"
-        tt = Analysis_TT(run_name=Path(tt_dir).name, filepath=tt_dir)
+        tt = _teacher_class(tt_dir, Analysis_TT)(run_name=Path(tt_dir).name, filepath=tt_dir)
     b = from_ctd(dd, tt, name=run_name, inputs_kind=inputs_kind, model_type=model_type,
                  with_dynamics=with_dynamics)
     return b

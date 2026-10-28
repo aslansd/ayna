@@ -22,7 +22,9 @@ Optional
                               ``inferred`` by it
     true_latents  (R, T, Dt)  ground truth (synthetic data only) -- tier 2
     true_rates    (R, T, N)
-    true_inputs   (R, T, Ut)
+    true_inputs   (R, T, Ut)  the inputs the teacher received (CtD's Input R² target)
+    true_inputs_noiseless (R, T, Ut)  the same inputs before input noise, when the
+                              simulator adds noise (used for ayna's misattribution truth)
     meta          JSON string: name, model, bin_ms, inputs_kind, labels, ...
 
 A ``dynamics`` callable ``f(z, u) -> z_next`` (arrays ``(M, D)``, ``(M, U)``)
@@ -50,6 +52,7 @@ ARRAY_KEYS = (
     "true_latents",
     "true_rates",
     "true_inputs",
+    "true_inputs_noiseless",
 )
 
 RATE_FLOOR = 1e-9
@@ -71,6 +74,7 @@ class Bundle:
     true_latents: Optional[np.ndarray] = None
     true_rates: Optional[np.ndarray] = None
     true_inputs: Optional[np.ndarray] = None
+    true_inputs_noiseless: Optional[np.ndarray] = None
     meta: dict = field(default_factory=dict)
     dynamics: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
     source: str = ""
@@ -129,7 +133,7 @@ class Bundle:
             raise BundleError(
                 f"'rates' must match 'spikes' {self.spikes.shape}; got {self.rates.shape}"
             )
-        for key in ("latents", "inputs", "true_latents", "true_inputs"):
+        for key in ("latents", "inputs", "true_latents", "true_inputs", "true_inputs_noiseless"):
             arr = getattr(self, key)
             if arr is None:
                 continue

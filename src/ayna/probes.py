@@ -356,36 +356,50 @@ def zero_input_fixed_points(b: Bundle, n_starts: int = 256, steps: int = 400, lr
                             tol: float = 1e-6, seed: int = 0, max_dims: int = 32) -> dict:
     """Fixed points of ``z -> f(z, 0)``, found by minimising ``q = |f(z,0) - z|^2 / 2``.
 
-    Batched finite-difference gradients keep this framework-free. Stability
-    uses the eigenvalues of the discrete-time Jacobian (stable if all |λ| < 1).
+    Gradients come from the dynamics itself when it offers them: a callable
+    with a ``vjp(z, u, v)`` attribute (vector-Jacobian product, ``J^T v``) and
+    a ``jacobian(z, u)`` attribute, as the CtD wrappers provide through torch
+    autograd. Otherwise batched finite differences are used, which cost one
+    call per latent dimension and are skipped above ``max_dims``.
+    Stability uses the eigenvalues of the discrete-time Jacobian (stable if
+    all |λ| < 1). ``tol`` is on q relative to the latent variance.
     """
     rng = np.random.default_rng(seed)
     f = b.dynamics
-    if b.n_latents > max_dims:
+    exact = hasattr(f, "vjp")
+    if not exact and b.n_latents > max_dims:
         return {"fixed_points": None, "fixed_points_note":
-                f"not attempted: {b.n_latents} latent dims exceeds {max_dims} for the finite-difference search"}
-    Zall = b.flat("latents", "val")
+                f"not attempted: {b.n_latents} latent dims exceeds {max_dims} for the finite-difference "
+                "search, and the dynamics callable offers no vjp() for exact gradients"}
+    Zall = b.flat("latents", "val").astype(float)
     U_dim = b.inputs.shape[2] if b.inputs is not None else 1
-    z = Zall[rng.choice(len(Zall), min(n_starts, len(Zall)), replace=False)].astype(float)
+    z = Zall[rng.choice(len(Zall), min(n_starts, len(Zall)), replace=False)]
     z = z + 0.05 * Zall.std(0) * rng.standard_normal(z.shape)
     zero = np.zeros((len(z), U_dim))
     D = z.shape[1]
     scale = Zall.std() + 1e-12
     h = 1e-4 * scale
 
+    def resid(zz, uu):
+        return np.asarray(f(zz, uu), dtype=float) - zz
+
     def q(zz):
-        d = np.asarray(f(zz, zero)) - zz
+        d = resid(zz, zero[: len(zz)])
         return 0.5 * np.sum(d * d, axis=1)
 
     m = np.zeros_like(z)
     v = np.zeros_like(z)
     for i in range(1, steps + 1):
-        base = q(z)
-        grad = np.empty_like(z)
-        for d in range(D):
-            e = np.zeros(D)
-            e[d] = h
-            grad[:, d] = (q(z + e) - base) / h
+        if exact:
+            d = resid(z, zero)
+            grad = np.asarray(f.vjp(z, zero, d), dtype=float) - d      # (J - I)^T d
+        else:
+            base = q(z)
+            grad = np.empty_like(z)
+            for k in range(D):
+                e = np.zeros(D)
+                e[k] = h
+                grad[:, k] = (q(z + e) - base) / h
         m = 0.9 * m + 0.1 * grad
         v = 0.999 * v + 0.001 * grad**2
         z = z - lr * scale * (m / (1 - 0.9**i)) / (np.sqrt(v / (1 - 0.999**i)) + 1e-12)
@@ -396,16 +410,22 @@ def zero_input_fixed_points(b: Bundle, n_starts: int = 256, steps: int = 400, lr
         if all(np.linalg.norm(p - u) > 0.05 * scale * np.sqrt(D) for u in uniq):
             uniq.append(p)
     n_stable = 0
+    u0 = np.zeros((1, U_dim))
     for p in uniq:
-        J = np.empty((D, D))
-        f0 = np.asarray(f(p[None], np.zeros((1, U_dim))))[0]
-        for d in range(D):
-            e = np.zeros(D)
-            e[d] = h
-            J[:, d] = (np.asarray(f((p + e)[None], np.zeros((1, U_dim))))[0] - f0) / h
+        if hasattr(f, "jacobian"):
+            J = np.asarray(f.jacobian(p[None], u0), dtype=float).reshape(D, D)
+        else:
+            J = np.empty((D, D))
+            f0 = np.asarray(f(p[None], u0))[0]
+            for k in range(D):
+                e = np.zeros(D)
+                e[k] = h
+                J[:, k] = (np.asarray(f((p + e)[None], u0))[0] - f0) / h
         if np.max(np.abs(np.linalg.eigvals(J))) < 1:
             n_stable += 1
-    return {"fixed_points": len(uniq), "stable_fixed_points": n_stable}
+    return {"fixed_points": len(uniq), "stable_fixed_points": n_stable,
+            "fixed_point_search": "exact gradients" if exact else "finite differences",
+            "fixed_point_min_q": float(np.min(qs))}
 
 
 def occupied_clusters(b: Bundle, max_k: int = 12, seed: int = 0) -> int:

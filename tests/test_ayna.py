@@ -330,3 +330,91 @@ def test_lfs_pointer_stubs_get_a_clear_error(tmp_path):
     (tmp_path / "model.pkl").write_text("version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 10\n")
     with pytest.raises(FileNotFoundError, match="Git LFS pointer"):
         check_lfs(tmp_path)
+
+
+# ================================================================ 0.3 additions
+def test_fixed_points_use_exact_gradients_in_high_dimension():
+    from ayna import probes as P
+
+    rng = np.random.default_rng(0)
+    D = 40
+    A = 0.5 * np.linalg.qr(rng.standard_normal((D, D)))[0]   # stable linear map, one fixed point at 0
+    R, T = 30, 20
+    b = Bundle(spikes=rng.poisson(1.0, (R, T, 5)), rates=np.ones((R, T, 5)),
+               latents=rng.standard_normal((R, T, D)), inputs=np.zeros((R, T, 2)),
+               meta={"inputs_kind": "inferred"})
+
+    def f(z, u):
+        return z @ A.T
+
+    b.dynamics = f
+    assert P.zero_input_fixed_points(b, n_starts=16)["fixed_points"] is None   # FD refuses at D=40
+    f.vjp = lambda z, u, v: v @ A
+    f.jacobian = lambda z, u: A
+    fp = P.zero_input_fixed_points(b, n_starts=16, steps=300)
+    assert fp["fixed_point_search"] == "exact gradients"
+    assert fp["fixed_points"] == 1 and fp["stable_fixed_points"] == 1
+
+
+def test_noiseless_inputs_drive_misattribution_truth():
+    b = synth("m", ["misattribution=0.2"], seed=21, **SMALL)
+    b.true_inputs_noiseless = b.true_inputs.copy()
+    b.true_inputs = b.true_inputs + 5.0 * np.random.default_rng(0).standard_normal(b.true_inputs.shape)
+    r = scan(b)
+    assert r.metrics["input_r2"] < 0.5 <= r.metrics["input_r2_noiseless"]
+    assert "DYNAMICAL_MISATTRIBUTION" not in r.ground_truth_flags()   # judged on the noiseless inputs
+
+
+def test_ctd_adapter_trims_teacher_to_shrunk_dataset():
+    from ayna.adapters.ctd import from_ctd
+
+    class BigTT(_FakeTT):
+        def get_latents(self, phase):
+            return np.arange({"train": 20, "val": 6}[phase] * 30 * 4, dtype=float).reshape(-1, 30, 4)
+
+        def get_inputs(self, phase):
+            return np.zeros(({"train": 20, "val": 6}[phase], 30, 3))
+
+    b = from_ctd(_FakeDD(), BigTT(), with_dynamics=False)
+    assert b.true_latents.shape == (20, 30, 4)          # 16 train + 4 val, the model's trials
+    np.testing.assert_array_equal(b.true_latents[16], BigTT().get_latents("val")[0])
+    assert any("teacher trimmed" in n for n in b.notes)
+
+
+def test_ctd_adapter_drops_misaligned_teacher():
+    from ayna.adapters.ctd import from_ctd
+
+    class ShortTT(_FakeTT):
+        def get_latents(self, phase):
+            return np.zeros(({"train": 16, "val": 4}[phase], 25, 4))   # wrong number of bins
+
+    b = from_ctd(_FakeDD(), ShortTT(), with_dynamics=False)
+    assert b.true_latents is None
+    assert any("ground truth dropped" in n for n in b.notes)
+
+
+def test_rollout_probe_does_not_judge_supplied_inputs():
+    """Losing the state without *supplied* inputs is real input dependence (closed-loop tasks)."""
+    b = synth("s", [], seed=31, inputs_kind="supplied", **SMALL)
+
+    def leaky(z, u):            # dynamics that need their inputs to hold the state
+        return 0.3 * z
+
+    b.dynamics = leaky
+    r = scan(b)
+    chk = next(c for c in r.checks if c.id == "DYNAMICAL_MISATTRIBUTION" and c.tier == 1)
+    assert chk.status == "not_assessed" and "supplied" in chk.reason
+    assert "DYNAMICAL_MISATTRIBUTION" not in r.flagged()
+
+
+def test_ctd_adapter_applies_trim_window_to_noiseless_inputs():
+    from ayna.adapters.ctd import from_ctd
+
+    class TrimTT(_FakeTT):
+        trim_inds = (3, 32)     # CtD convention: slice [trim[0]-1 : trim[1]] -> 30 bins
+
+        def get_true_inputs(self, phase):
+            return np.ones(({"train": 16, "val": 4}[phase], 35, 3))
+
+    b = from_ctd(_FakeDD(), TrimTT(), with_dynamics=False)
+    assert b.true_inputs_noiseless is not None and b.true_inputs_noiseless.shape[1] == 30

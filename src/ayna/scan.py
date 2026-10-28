@@ -249,7 +249,12 @@ class _Context:
         else:
             self.skip(det, 0, "inputs were supplied to the model, not inferred")
 
-        if b.dynamics is not None:
+        if b.dynamics is not None and b.inputs is not None and b.inputs_kind == "supplied":
+            # Supplied inputs are real: a state that depends on them (e.g. sensory feedback in a
+            # closed-loop task) is not misattribution. Found on CtD RandomTarget in 0.3.
+            self.skip(det, 1, "inputs were supplied to the model, so losing the state without them is "
+                      "genuine input dependence, not misattribution")
+        elif b.dynamics is not None:
             try:
                 roll = P.autonomous_rollout(b, horizon=th.rollout_horizon, seed=self.seed)
             except Exception as exc:  # user code: report, never crash the scan
@@ -333,10 +338,22 @@ class _Context:
         else:
             self.skip("FEATURE_INVENTION", 2, "no true latents")
         if b.inputs is not None and b.inputs_kind == "inferred" and b.true_inputs is not None:
-            ir = M.input_r2(b.flat("true_inputs", "train"), b.flat("inputs", "train"),
-                            b.flat("true_inputs", "val"), b.flat("inputs", "val"))
+            U_tr, U_va = b.flat("inputs", "train"), b.flat("inputs", "val")
+            ir = M.input_r2(b.flat("true_inputs", "train"), U_tr, b.flat("true_inputs", "val"), U_va)
             self.m["input_r2"] = ir
-            self._gt("DYNAMICAL_MISATTRIBUTION", ir < th.gt_input_r2, f"Input R² {ir:.3f} (flag if < {th.gt_input_r2})")
+            if b.true_inputs_noiseless is not None:
+                # CtD scores against the noisy inputs the teacher received; that caps Input R² at
+                # the inputs' signal fraction (below 0.2 on 3BFF), so the truth line uses the
+                # noiseless inputs the task actually specified.
+                irn = M.input_r2(b.flat("true_inputs_noiseless", "train"), U_tr,
+                                 b.flat("true_inputs_noiseless", "val"), U_va)
+                self.m["input_r2_noiseless"] = irn
+                self._gt("DYNAMICAL_MISATTRIBUTION", irn < th.gt_input_r2,
+                         f"Input R² vs noiseless inputs {irn:.3f} (flag if < {th.gt_input_r2}); "
+                         f"CtD's Input R² vs noisy inputs {ir:.3f}")
+            else:
+                self._gt("DYNAMICAL_MISATTRIBUTION", ir < th.gt_input_r2,
+                         f"Input R² {ir:.3f} (flag if < {th.gt_input_r2})")
         else:
             self.skip("DYNAMICAL_MISATTRIBUTION", 2, "needs inferred inputs and true inputs")
         if b.inputs is not None and b.inputs_kind == "supplied" and b.true_latents is not None:

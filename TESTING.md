@@ -20,7 +20,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-29 tests, under a minute to a few minutes on a laptop CPU. They need no
+34 tests, under a minute to a few minutes on a laptop CPU. They need no
 optional dependency and must all pass in any environment. `test_ctd_live.py`
 is collected too and shows as 1 skipped module when CtD is not importable.
 That is expected.
@@ -47,10 +47,18 @@ What the core suite pins down:
   - a readout bottleneck makes cycle-consistency comparative only;
   - `select` never recommends a leaky model;
   - `select` labels show the part of the name that varies.
+- **0.3 behaviour learned on held-out models:**
+  - fixed points use exact gradients (`vjp`, `jacobian`) when the dynamics
+    offer them, so the search runs above 32 dimensions;
+  - the misattribution truth uses noiseless inputs when the bundle has them;
+  - the rollout probe never judges *supplied* inputs. Found on RandomTarget,
+    where the state legitimately depends on sensory feedback.
 - **CtD adapter, without CtD.** Duck-typed fakes cover the getters, held-out
   ordering, the train/val split, all-zero trial lengths, getters that
-  raise, `eval()` being called, the LFADS bottleneck, and the error for Git
-  LFS pointer stubs.
+  raise, `eval()` being called, the LFADS bottleneck, the error for Git
+  LFS pointer stubs, trimming the teacher to a prefix-shrunk dataset,
+  dropping misaligned ground truth, and applying CtD's trim window to the
+  noiseless inputs.
 - **CLI.** `synth` → `scan` with JSON output and the exit code for CI.
 
 ## 2. Synthetic validation
@@ -98,6 +106,21 @@ ayna ctd $W/inputinf_sweep --model-type LFADS --tt $W/tt_3bff --out reports/lfad
 Each writes per-model `report.{txt,md,json}`, `select.{txt,json}`,
 `validation.{txt,json}` and `summary.txt`. Exports are seeded, so
 repeated runs give identical numbers.
+
+## 4. Held-out models (0.3)
+
+The models behind VALIDATION.md's held-out section are trained, not
+downloaded. See [experiments/ctd_tasks/README.md](experiments/ctd_tasks/README.md).
+Training takes about 7 hours on a 2-core CPU. Scanning afterwards takes a few
+minutes per task:
+
+```bash
+T=$HOME_DIR/content/trained_models/task-trained
+ayna ctd runs/RandomTarget       --model-type SAE   --tt $T/tt_RandomTarget --out reports/rt
+ayna ctd runs/RandomTarget_LFADS --model-type LFADS --tt $T/tt_RandomTarget --out reports/rt_lfads
+ayna ctd runs/NBFF               --model-type SAE   --tt $T/tt_3bff         --out reports/nbff
+ayna ctd runs/MultiTask          --model-type SAE   --tt $T/tt_MultiTask    --out reports/mt
+```
 
 ## Before a release
 

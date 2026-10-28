@@ -25,25 +25,58 @@ from .synth import make_model_outputs, make_truth
 DETECTORS = ("UNDERFITTING", "FEATURE_INVENTION", "DYNAMICAL_MISATTRIBUTION",
              "INPUT_INHERITED_STRUCTURE", "NONLINEAR_READOUT")
 
+# Sweep-relative truth (pre-registered in 0.3): a fault is present if its truth metric is more than
+# RELATIVE_MARGIN below the best model in the same sweep. First available metric wins.
+RELATIVE_MARGIN = 0.05
+RELATIVE_TRUTH = {
+    "UNDERFITTING": ("rate_r2",),
+    "FEATURE_INVENTION": ("state_r2",),
+    "DYNAMICAL_MISATTRIBUTION": ("input_r2_noiseless", "input_r2"),
+}
+
 # (ground-truth-free metric, ground-truth metric, expected sign of the rank correlation)
 PAIRS = (
     ("UNDERFITTING", "recoverable_fraction", "rate_r2", -1),
     ("FEATURE_INVENTION", "cycle_consistency", "state_r2", +1),
     ("DYNAMICAL_MISATTRIBUTION", "input_leakage_r2", "input_r2", -1),
     ("DYNAMICAL_MISATTRIBUTION", "rollout_gap", "input_r2", -1),
+    ("DYNAMICAL_MISATTRIBUTION", "input_leakage_r2", "input_r2_noiseless", -1),
+    ("DYNAMICAL_MISATTRIBUTION", "rollout_gap", "input_r2_noiseless", -1),
 )
 
 
 @dataclass
 class Validation:
     cases: list = field(default_factory=list)   # one dict per bundle
+    relative_margin: float = RELATIVE_MARGIN
 
-    def table(self) -> dict:
-        """Confusion counts per (detector, tier)."""
+    def relative_truth(self) -> dict:
+        """Sweep-relative truth: present if the truth metric is more than ``relative_margin`` below the
+        best model in this set (see RELATIVE_TRUTH). Absolute truth lines from synthetic data do not
+        transfer to tasks whose best achievable value is lower (noisy teachers, sparse spiking).
+
+        Pre-registered in 0.3, before the 3BFF-reseeded, MultiTask and RandomTarget-LFADS sweeps
+        were scanned. Returns ``{case index: {detector: bool}}``.
+        """
+        out = {i: {} for i in range(len(self.cases))}
+        for det, candidates in RELATIVE_TRUTH.items():
+            for metric in candidates:
+                vals = {i: c["metrics"].get(metric) for i, c in enumerate(self.cases)}
+                vals = {i: v for i, v in vals.items() if v is not None and np.isfinite(v)}
+                if len(vals) >= 2:
+                    best = max(vals.values())
+                    for i, v in vals.items():
+                        out[i][det] = bool(v < best - self.relative_margin)
+                    break
+        return out
+
+    def table(self, relative: bool = False) -> dict:
+        """Confusion counts per (detector, tier), against absolute or sweep-relative truth."""
         out = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0, "tn": 0})
-        for case in self.cases:
+        rel = self.relative_truth() if relative else None
+        for idx, case in enumerate(self.cases):
             for det in DETECTORS:
-                truth = case["truth"].get(det)
+                truth = rel[idx].get(det) if relative else case["truth"].get(det)
                 if truth is None:
                     continue
                 for tier, pred in case["pred"].get(det, {}).items():
@@ -80,12 +113,20 @@ class Validation:
             rec = c["tp"] / (c["tp"] + c["fn"]) if c["tp"] + c["fn"] else float("nan")
             lines.append(f"{det:<27}{tier:>5}{c['tp']:>5}{c['fp']:>5}{c['fn']:>5}{c['tn']:>5}"
                          f"{_p(prec):>11}{_p(rec):>8}")
+        if any(self.relative_truth().values()) and len(self.cases) >= 2:
+            lines += ["", f"against sweep-relative truth (more than {self.relative_margin} below the best model here)",
+                      f"{'detector':<27}{'tier':>5}{'TP':>5}{'FP':>5}{'FN':>5}{'TN':>5}{'precision':>11}{'recall':>8}"]
+            for (det, tier), c in sorted(self.table(relative=True).items()):
+                prec = c["tp"] / (c["tp"] + c["fp"]) if c["tp"] + c["fp"] else float("nan")
+                rec = c["tp"] / (c["tp"] + c["fn"]) if c["tp"] + c["fn"] else float("nan")
+                lines.append(f"{det:<27}{tier:>5}{c['tp']:>5}{c['fp']:>5}{c['fn']:>5}{c['tn']:>5}"
+                             f"{_p(prec):>11}{_p(rec):>8}")
         corr = self.correlations()
         if corr:
             lines += ["", "rank agreement with ground truth (Spearman)",
-                      f"{'metric':<24}{'truth':<12}{'n':>4}{'rho':>8}  expected"]
+                      f"{'metric':<24}{'truth':<20}{'n':>4}{'rho':>8}  expected"]
             for c in corr:
-                lines.append(f"{c['metric']:<24}{c['truth']:<12}{c['n']:>4}{c['spearman']:>8.2f}  "
+                lines.append(f"{c['metric']:<24}{c['truth']:<20}{c['n']:>4}{c['spearman']:>8.2f}  "
                              f"{'negative' if c['expected_sign'] < 0 else 'positive'}"
                              f"{'' if c['agrees'] else '  <- disagrees'}")
         misses = [c for c in self.cases if c["disagreements"]]
@@ -99,8 +140,10 @@ class Validation:
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         table = {f"{d}|tier{t}": c for (d, t), c in self.table().items()}
+        rel_table = {f"{d}|tier{t}": c for (d, t), c in self.table(relative=True).items()}
         (out / "validation.json").write_text(json.dumps(
-            {"table": table, "correlations": self.correlations(), "cases": self.cases}, indent=2, default=float))
+            {"table": table, "relative_margin": self.relative_margin, "relative_table": rel_table,
+             "correlations": self.correlations(), "cases": self.cases}, indent=2, default=float))
         (out / "validation.txt").write_text(self.render_text())
         return out
 
