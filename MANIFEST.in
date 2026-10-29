@@ -1,3 +1,4 @@
 include README.md INSTALL.md TESTING.md PUBLISHING.md ROADMAP.md VALIDATION.md CHANGELOG.md LICENSE
 recursive-include validation *.txt *.json
 recursive-include tests *.py
+recursive-include experiments *.py *.sh *.md

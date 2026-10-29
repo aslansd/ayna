@@ -32,31 +32,59 @@ faults and `validate`. A daftar provenance extra.
 - Tier-1 dynamics wrappers for CtD's NODE and LFADS cells.
 - Found and reproduced a co-BPS slicing bug in CtD's comparison code.
 
-## Next: 0.3 — breadth of evidence
+### 0.3 — held-out evidence
+- **Models ayna had never seen.** Trained on a 2-core CPU from CtD's
+  pretrained teachers:
+  - RandomTarget NODE (3 sizes × 2 seeds) and LFADS (3 controller-KL
+    scales);
+  - reseeded 3BFF NODE (3 sizes);
+  - MultiTask NODE (3 sizes).
 
-The 0.2 real-model evidence comes from one task (3BFF), two model classes, one
-seed each and twelve models in total. That is enough to catch broken
-detectors, and not enough to trust thresholds.
+  No detector threshold was changed after seeing them. Results and every
+  miss are in [VALIDATION.md](VALIDATION.md).
+- **Sweep-relative truth, pre-registered** (git commit `b4e48f4`) before the
+  3BFF, MultiTask and LFADS sweeps were scanned.
+- **Noiseless Input R²** as the misattribution truth when the teacher
+  provides it.
+- **Exact-gradient fixed points.** Dynamics callables can offer `vjp` and
+  `jacobian`, and the CtD wrappers do, so the search runs in any dimension.
+- **A bug found by the held-out set.** The tier-1 rollout probe judged
+  *supplied* inputs. It is now limited to inferred inputs.
+- **CtD adapter:** prefix-shrunk datasets, task-specific teacher classes,
+  CtD's trim window applied to the noiseless inputs.
 
-- **More CtD tasks.** CtD ships pretrained task-trained teachers for
-  MultiTask, RandomTarget, PhaseCodedMemory and ChaoticDelayedMatching, but no
-  data-trained sweeps on them. Generate small NODE and LFADS sweeps on each.
-  They need a GPU to train, but ayna scans them on a CPU. Then run
-  leave-one-task-out tests of every threshold. RandomTarget is the real test
-  for `INPUT_INHERITED_STRUCTURE`.
-- **Several seeds per configuration.** Run-to-run spread is the natural unit
-  for "significantly worse", in `select` and in the truth lines.
-- **Truth lines for real models.** On CtD's LFADS models every Rate R² sits
-  between 0.86 and 0.90 and every Input R² below 0.2, because the true inputs
-  are noisy. The synthetic truth lines (0.90 and 0.50) do not transfer. Options:
-  score Input R² against noiseless inputs, or define truth relative to the
-  best model in a sweep. For now, VALIDATION.md reports rank agreement next to
-  every binary table.
-- **Real recordings.** A bundle reader for NWB / Neural Latents Benchmark
-  data, with a worked example on MC_Maze. There is no ground truth there; the
-  claim is only "stable, and quiet when unsure".
-- **Fixed points in high dimension.** The finite-difference search is skipped
-  above 32 latent dimensions. Use autograd when the dynamics are torch.
+## Next: 0.4 — what the held-out set says to fix
+
+Each item below is a failure seen in 0.3. A fix tuned on these same models
+needs another fresh set to be believed.
+
+- **Underfitting at low spike counts.** On RandomTarget, recoverable
+  information was large (1–2%), but the per-trial test never reached z = 3
+  (z ≈ 1.8). Options: pool across neurons before testing, or use the
+  baseline comparison alone when spikes are sparse.
+- **Invention the readout can see.** Cycle-consistency only detects latent
+  structure the rates ignore. RandomTarget NODE-10 and MultiTask NODE-20
+  have State R² 0.75–0.88 with cycle-consistency ≥ 0.95. Candidates: seed
+  consistency, which needs seeds, and comparison against a simpler model's
+  latents.
+- **Info-level findings count as "flagged" in validation.** For
+  `INPUT_INHERITED_STRUCTURE`, that produced two MultiTask false positives
+  at filter R² 0.42–0.60, below the 0.70 warning line that the truth uses.
+- **Closed-loop tasks and input leakage.** The 0.2 open question is now
+  answered. On RandomTarget LFADS, KL = 0, lag-1 leakage is 0.88 and flags
+  misattribution, yet the inputs are well inferred (Input R² 0.78 against
+  noiseless inputs). True sensory feedback depends on the state. The tier-1
+  rollout stayed clean. Proposal: a declared `meta["closed_loop"]` that
+  makes tier-0 leakage informational and lets tier 1 decide.
+- **More seeds.** One or two per configuration is not enough for
+  run-to-run spread.
+- **PhaseCodedMemory and ChaoticDelayedMatching.** CtD's simulator needs
+  more than about 4 GB to generate their datasets even with chunked teacher
+  calls, more than this machine had alongside training. On a bigger machine,
+  `gen_data.py` should just work.
+- **Real recordings.** An NWB / Neural Latents Benchmark reader, with
+  MC_Maze as the worked example. The DANDI archive was not reachable from
+  the 0.3 build environment, so this needs a local copy of the data.
 
 ## Later
 
@@ -72,9 +100,10 @@ detectors, and not enough to trust thresholds.
 
 ## Open questions
 
-- **Closed-loop tasks.** In RandomTarget, sensory inputs depend on the
-  model's own output, so true inputs *are* predictable from the preceding
-  state. How should input leakage be read there?
 - **Noise-driven residuals.** Should a residual that no deterministic model
   can remove count as underfitting? On CtD's noisy teacher, every NODE size
   leaves about 0.2% recoverable information.
+- **What should truth be on real-model sweeps?** Absolute lines from
+  synthetic data do not transfer. 0.3 pre-registered a sweep-relative line
+  (0.05 below the best model). Small sweeps make it brittle, because one
+  model's value moves the line.

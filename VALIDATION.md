@@ -4,16 +4,175 @@ How far to trust each detector, and where it breaks. Raw outputs for every
 table here are in [`validation/`](validation/), and [TESTING.md](TESTING.md)
 gives the commands that regenerate them.
 
-There are two kinds of evidence, and they answer different questions:
+There are three kinds of evidence, and they answer different questions:
 
 - **Synthetic corpus** (`ayna validate`). Do the detectors find faults that
   were deliberately injected? ayna's own simulator injects them and the same
   author wrote the detectors, so this tests design, not transfer.
-- **Trained models** (`ayna ctd`). Do the detectors agree with ground truth on
-  models that were actually trained? These are CtD's 12 pretrained 3BFF
-  models, scored against the task-trained teacher's latents, rates and inputs.
+- **Held-out trained models** (0.3, `ayna ctd`). Do the detectors hold on
+  models, tasks and seeds they were not designed on? These are 15 models
+  trained for this purpose (section 1).
+- **CtD's pretrained models** (0.2, `ayna ctd`). Do the detectors agree with
+  ground truth on models that were actually trained? These are CtD's 12
+  pretrained 3BFF models, scored against the task-trained teacher. The 0.2
+  detectors were redesigned on them, so they are not a held-out test
+  (section 2).
 
-## 1. Trained models: CtD 3BFF walkthrough
+## 1. Held-out models (0.3)
+
+These are 15 models ayna's detectors had never seen. They were trained in
+this project on a 2-core CPU from CtD's pretrained teachers
+([experiments/ctd_tasks](experiments/ctd_tasks/README.md)), on three tasks:
+
+- RandomTarget, closed-loop arm control;
+- MultiTask, 15 cognitive subtasks;
+- 3BFF, with its dataset regenerated and a new training seed.
+
+**Ground rules:**
+
+- No detector threshold was changed after these results were seen.
+- One scoping bug was fixed: the tier-1 rollout probe judged supplied
+  inputs (see below).
+- The sweep-relative truth line was committed (`b4e48f4`) before the 3BFF,
+  MultiTask and LFADS sweeps were scanned. RandomTarget NODE had been seen
+  before the commit.
+
+**Caveats:**
+
+- **These are not CtD's models.** Batch size 25 and far fewer epochs than
+  CtD's GPU runs make many of them undertrained, especially MultiTask at 25
+  epochs. That makes them real underfitting cases, but they are not
+  reproductions.
+- **Each sweep has 3–6 models.** A rank correlation of ±1 over 3 models is
+  easy to get by chance.
+
+Two truth columns appear below:
+
+- **absolute**: the synthetic lines (Rate R² < 0.90, State R² < 0.90,
+  noiseless Input R² < 0.50);
+- **relative**: more than 0.05 below the best model in the same sweep.
+
+### RandomTarget NODE: supplied, closed-loop inputs (6 models)
+
+| model | co-BPS | baseline | recoverable (z) | cycle-con | input filter | ayna flags | Rate R² | State R² | truth: absolute / relative |
+|---|---|---|---|---|---|---|---|---|---|
+| latent 3, seed 0 | 0.017 | 0.014 | 1.8% (1.8) | 1.00 | 0.93 | inherited | 0.725 | 0.962 | underfit, inherited / underfit |
+| latent 3, seed 1 | 0.016 | 0.014 | 2.1% (2.0) | 1.00 | 0.94 | inherited | 0.729 | 0.964 | underfit, inherited / underfit |
+| latent 10, seed 0 | 0.017 | 0.014 | 1.1% (1.8) | 1.00 | 0.86 | inherited | 0.864 | 0.883 | underfit, invention, inherited / invention |
+| latent 10, seed 1 | 0.018 | 0.014 | −0.2% (−0.3) | 1.00 | 0.84 | inherited | 0.873 | 0.868 | underfit, invention, inherited / invention |
+| latent 64, seed 0 | 0.014 | 0.014 | 0.6% (0.8) | **0.75** | 0.30 | invention, underfit | 0.653 | 0.315 | all three / underfit, invention |
+| latent 64, seed 1 | 0.013 | 0.014 | 0.7% (1.2) | **0.75** | 0.29 | invention, underfit | 0.651 | 0.303 | all three / underfit, invention |
+
+**What held:**
+
+- **`INPUT_INHERITED_STRUCTURE` is correct on 4 of 6** in its first test on
+  trained models. 94% of the teacher's latent variance is a 10-bin filter of
+  its inputs. The two misses are the NODE-64s, whose latents are mostly
+  invented, so the inputs explain less of them.
+- **`FEATURE_INVENTION` catches both NODE-64s**, where State R² is 0.30–0.32.
+  Rank agreement of cycle-consistency with State R² is +0.85.
+- **`select` recommends NODE-10, seed 1.** It has the best Rate R² in the
+  sweep.
+
+**What failed:**
+
+- **Underfitting from recoverable information.** RandomTarget's spike counts
+  are tiny: co-BPS is about 0.017, against about 0.11 on 3BFF. So the
+  per-trial test never reaches z = 3, even at a 2% fraction, and recoverable
+  information does not rank this sweep (Spearman −0.09). The NODE-64s were
+  caught only by the baseline comparison.
+- **Invention the readout can see.** Under relative truth, both NODE-10s
+  invent (State R² 0.87–0.88 against 0.96 for NODE-3), but their
+  cycle-consistency is 1.00. Cycle-consistency only sees latent structure
+  the rates ignore, the limit CtD's paper itself states.
+
+### 3BFF NODE: regenerated dataset, seed 1 (3 models)
+
+| model | co-BPS | recoverable (z) | cycle-con | ayna flags | Rate R² | State R² | truth: absolute / relative |
+|---|---|---|---|---|---|---|---|
+| latent 3 | 0.102 | 1.1% (17) | 1.00 | underfit | 0.827 | 0.951 | underfit / underfit |
+| latent 8 | 0.112 | 0.3% (8) | 0.95 | — | 0.897 | 0.931 | underfit / — |
+| latent 64 | 0.108 | 0.6% (11) | **0.70** | invention, underfit | 0.862 | 0.622 | underfit, invention / invention |
+
+- **`select` recommends NODE-8, as on CtD's own sweep.**
+- **Invention is right on all three.**
+- **Recoverable information ranks the three exactly as Rate R² does.**
+- **Disagreements:**
+  - NODE-8 sits just under the absolute line (0.897 vs 0.90) and is not
+    flagged;
+  - NODE-64 is flagged underfit at 0.6%, but under relative truth it is
+    within 0.05 of the best (0.862 vs 0.897).
+
+### MultiTask NODE: 25 epochs (3 models)
+
+| model | co-BPS | baseline | recoverable (z) | cycle-con | input filter | ayna flags | Rate R² | State R² | truth: absolute / relative |
+|---|---|---|---|---|---|---|---|---|---|
+| latent 5 | 0.068 | 0.072 | 17% (13) | 1.00 | 0.60 | underfit, inherited (info) | 0.377 | 0.863 | underfit, invention / underfit |
+| latent 20 | 0.100 | 0.072 | 2.1% (9) | 0.95 | 0.42 | underfit, inherited (info) | 0.553 | 0.746 | underfit, invention / underfit, invention |
+| latent 64 | 0.110 | 0.072 | 1.9% (9) | **0.81** | 0.35 | invention, underfit | 0.623 | 0.697 | underfit, invention / invention |
+
+- **`UNDERFITTING` catches all three**, which is right: every model is badly
+  undertrained.
+- **`select` reports the reconstruction trap.** NODE-64 has the best co-BPS
+  but cycle-consistency 0.81, against 0.95 for NODE-20.
+- **NODE-20's invention is missed.** Its cycle-consistency of 0.95 is just
+  above the line.
+- **The two `INPUT_INHERITED_STRUCTURE` "flags" are info-level findings**
+  (filter R² 0.42 and 0.60, below the 0.70 warning line). Validation counts
+  info as flagged while the truth uses 0.70. That is a definitional
+  mismatch, recorded for 0.4 and not changed here.
+
+### RandomTarget LFADS: inferred inputs, controller KL sweep (3 models)
+
+The latents are the generator state read through a 64-factor bottleneck,
+so `FEATURE_INVENTION` is comparative only.
+
+| KL scale | lag-1 leakage | rollout gap | ayna flags | Input R² (noiseless) | CtD Input R² | Rate R² |
+|---|---|---|---|---|---|---|
+| 0 | **0.88** | 0.22 | misattribution (tier 0), underfit | 0.779 | 0.718 | 0.836 |
+| 1e-4 | **0.64** | −0.54 | misattribution (tier 0) | 0.462 | 0.424 | 0.825 |
+| 1e-2 | **0.66** | −0.33 | misattribution (tier 0), underfit | 0.649 | 0.596 | 0.708 |
+
+- **Tier-0 leakage flags all three models.** Precision is 0.33 against
+  absolute truth and 0.67 against relative truth. Ground truth calls KL = 0
+  clean (0.78).
+- **The tier-1 rollout flags none of them.** It misses KL = 1e-4, the one
+  model clearly misattributed (0.46).
+- **`select` refuses to trust itself.** Every model leaks, so it says the
+  recommendation (KL = 1e-4, the best co-BPS) "should not be trusted until
+  one model passes". On this sweep that is the right answer from a tool that
+  cannot tell closed-loop feedback from misattribution.
+
+**The closed-loop question from 0.2's roadmap now has an answer.** On KL = 0,
+lag-1 leakage is 0.88, yet that model infers its inputs *well* (noiseless
+Input R² 0.78). RandomTarget's true inputs include sensory feedback that
+depends on the network's own state, so they are predictable from the
+preceding state whether or not the model misattributes. Tier-0 leakage is
+not trustworthy in closed-loop tasks. The tier-1 rollout probe stayed
+clean on that model. The 0.4 proposal is a declared `closed_loop` flag that
+makes tier-0 leakage informational.
+
+Unlike 3BFF, more KL made input inference *worse* here (0.78 → 0.46). The
+3BFF finding "low KL ⇒ misattribution" does not carry over as a rule.
+
+
+### Held-out scorecard
+
+Counts are summed over the four held-out sweeps (15 models), shown as
+TP / FP / FN / TN.
+
+| detector | tier | absolute truth | relative truth | verdict |
+|---|---|---|---|---|
+| `FEATURE_INVENTION` | 0 | 4 / 0 / 4 / 4 | 4 / 0 / 3 / 5 | Never wrong when it fires. Misses invention that the readout can see. |
+| `UNDERFITTING` | 0 | 9 / 0 / 6 / 0 | 6 / 3 / 2 / 4 | Reliable where spikes are plentiful (3BFF, MultiTask). Underpowered on RandomTarget. |
+| `INPUT_INHERITED_STRUCTURE` | 0 | 4 / 2 / 2 / 4 | — | Correct on the closed-loop task it was built for. Info-level counting causes the false positives. |
+| `DYNAMICAL_MISATTRIBUTION` | 0 | 1 / 2 / 0 / 0 | 2 / 1 / 0 / 0 | Not usable in closed-loop tasks without a flag. |
+| `DYNAMICAL_MISATTRIBUTION` | 1 | 0 / 0 / 1 / 2 | 0 / 0 / 2 / 1 | Quiet, and misses the one misattributed model. |
+| `select` | — | recommends the best-truth model on 3BFF and RandomTarget NODE | | reports the trap on MultiTask; declines to trust itself on RandomTarget LFADS |
+
+Every number in this section is in [`validation/heldout/`](validation/heldout/).
+
+## 2. CtD's pretrained 3BFF walkthrough models (0.2)
 
 CtD 1.0.2 (commit `051e11e`), `examples/walkthrough_models/`:
 
@@ -96,6 +255,19 @@ One seed per configuration, CPU only, exports seeded.
 - **The zero-input fixed-point search is not attempted.** With 128 latent
   dimensions, the finite-difference search is skipped and the report says so.
 
+**Rescored in 0.3 against noiseless inputs.** 0.2's roadmap blamed input
+noise for the low Input R² values here. It is only part of the cause:
+
+- Scored against the teacher's noiseless inputs, the best model reaches only
+  0.27 (KL = 1e-4), up from 0.21. KL = 1e-3 rises most (0.11 → 0.22).
+- The binary table against the 0.5 line is unchanged: 3 TP, 3 FN.
+- Against sweep-relative truth, the three low-KL models ayna flags are all
+  correct. The two it leaves alone (KL = 1e-3, 1e-2) fall just over the line
+  (0.215 and 0.004 against 0.223). That gives 3 TP, 2 FN and 1 TN.
+
+These models were seen while designing 0.2, so this is not held-out
+evidence.
+
 ### What 0.1 got wrong on these models
 
 0.2 exists because of this run. On the same 12 models, the 0.1 detectors:
@@ -125,7 +297,7 @@ On the NODE-8 model, CtD's code gives 0.1262. The true held-out neurons give
 `tests/test_ctd_live.py` checks this. Using
 `get_model_inputs(phase)[0].shape[-1]`, the held-in spike count, fixes it.
 
-## 2. Synthetic corpus
+## 3. Synthetic corpus
 
 `ayna validate --n 10 --seed 7` gives 85 bundles. The cases are 3-bit
 flip-flop and input-driven systems with one or two faults, injected at

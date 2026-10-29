@@ -1,0 +1,32 @@
+== select ==
+model                 latents    co_bps   cycle  stateR2  rateR2
+----------------------------------------------------------------
+latent_size=3_seed=0        3    0.0165   1.000    0.962   0.725
+latent_size=3_seed=1        3    0.0164   1.000    0.964   0.729
+latent_size=10_seed=0      10    0.0173   1.000    0.883   0.864
+latent_size=10_seed=1      10    0.0178   1.000    0.868   0.873 <- recommended
+latent_size=64_seed=0      64    0.0138   0.755    0.315   0.653
+latent_size=64_seed=1      64    0.0134   0.754    0.303   0.651
+
+The best-reconstructing model (latent_size=10_seed=1_max_epochs=150_batch=25) is also the recommended one.
+
+== validation against the task-trained ground truth ==
+6 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    2    0    2    2       1.00    0.50
+INPUT_INHERITED_STRUCTURE      0    4    0    2    0       1.00    0.67
+UNDERFITTING                   0    2    0    4    0       1.00    0.33
+
+rank agreement with ground truth (Spearman)
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2                6   -0.09  negative
+cycle_consistency       state_r2               6    0.85  positive
+
+disagreements
+  latent_size=10_seed=0_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present); FEATURE_INVENTION tier 0: missed (truth: present)
+  latent_size=10_seed=1_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present); FEATURE_INVENTION tier 0: missed (truth: present)
+  latent_size=3_seed=0_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present)
+  latent_size=3_seed=1_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present)
+  latent_size=64_seed=0_max_epochs=150_batch=25 INPUT_INHERITED_STRUCTURE tier 0: missed (truth: present)
+  latent_size=64_seed=1_max_epochs=150_batch=25 INPUT_INHERITED_STRUCTURE tier 0: missed (truth: present)

@@ -48,7 +48,7 @@ PAIRS = (
 @dataclass
 class Validation:
     cases: list = field(default_factory=list)   # one dict per bundle
-    relative_margin: float = RELATIVE_MARGIN
+    relative_margin: float | None = RELATIVE_MARGIN   # None: not a sweep (e.g. the synthetic corpus)
 
     def relative_truth(self) -> dict:
         """Sweep-relative truth: present if the truth metric is more than ``relative_margin`` below the
@@ -59,6 +59,8 @@ class Validation:
         were scanned. Returns ``{case index: {detector: bool}}``.
         """
         out = {i: {} for i in range(len(self.cases))}
+        if self.relative_margin is None:
+            return out
         for det, candidates in RELATIVE_TRUTH.items():
             for metric in candidates:
                 vals = {i: c["metrics"].get(metric) for i, c in enumerate(self.cases)}
@@ -113,7 +115,7 @@ class Validation:
             rec = c["tp"] / (c["tp"] + c["fn"]) if c["tp"] + c["fn"] else float("nan")
             lines.append(f"{det:<27}{tier:>5}{c['tp']:>5}{c['fp']:>5}{c['fn']:>5}{c['tn']:>5}"
                          f"{_p(prec):>11}{_p(rec):>8}")
-        if any(self.relative_truth().values()) and len(self.cases) >= 2:
+        if self.relative_margin is not None and any(self.relative_truth().values()) and len(self.cases) >= 2:
             lines += ["", f"against sweep-relative truth (more than {self.relative_margin} below the best model here)",
                       f"{'detector':<27}{'tier':>5}{'TP':>5}{'FP':>5}{'FN':>5}{'TN':>5}{'precision':>11}{'recall':>8}"]
             for (det, tier), c in sorted(self.table(relative=True).items()):
@@ -225,7 +227,7 @@ def corpus_specs(n_per_fault: int = 6, seed: int = 0) -> list:
 
 def validate_synthetic(n_per_fault: int = 6, seed: int = 0, thresholds: Thresholds | None = None,
                        progress=None) -> Validation:
-    val = Validation()
+    val = Validation(relative_margin=None)   # a corpus of unrelated systems, not one sweep
     specs = corpus_specs(n_per_fault, seed)
     for k, spec in enumerate(specs):
         truth = make_truth(spec["kind"], spec["n_trials"], 100, spec["n_neurons"], max(8, spec["n_neurons"] // 4),

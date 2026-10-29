@@ -7,7 +7,7 @@ and dynamical misattribution. It runs on numpy, never trains anything, and
 says what it could not check.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .bundle import Bundle, BundleError, load_bundle  # noqa: E402
 from .report import Check, Finding, Report  # noqa: E402

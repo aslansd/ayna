@@ -23,7 +23,12 @@ FEATURE_INVENTION              0    3    0    0    3       1.00    1.00
 INPUT_INHERITED_STRUCTURE      0    0    0    0    6        n/a     n/a
 UNDERFITTING                   0    2    0    0    4       1.00    1.00
 
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    3    0    0    3       1.00    1.00
+UNDERFITTING                   0    1    1    0    4       0.50    1.00
+
 rank agreement with ground truth (Spearman)
-metric                  truth          n     rho  expected
-recoverable_fraction    rate_r2        6   -1.00  negative
-cycle_consistency       state_r2       6    0.94  positive
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2                6   -1.00  negative
+cycle_consistency       state_r2               6    0.94  positive

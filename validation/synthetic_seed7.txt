@@ -9,11 +9,11 @@ NONLINEAR_READOUT              0   10    0    0   75       1.00    1.00
 UNDERFITTING                   0   13    2    2   68       0.87    0.87
 
 rank agreement with ground truth (Spearman)
-metric                  truth          n     rho  expected
-recoverable_fraction    rate_r2       85   -0.53  negative
-cycle_consistency       state_r2      85    0.49  positive
-input_leakage_r2        input_r2      35   -0.60  negative
-rollout_gap             input_r2      35   -0.32  negative
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2               85   -0.53  negative
+cycle_consistency       state_r2              85    0.49  positive
+input_leakage_r2        input_r2              35   -0.60  negative
+rollout_gap             input_r2              35   -0.32  negative
 
 disagreements
   underfit_inferred_0                UNDERFITTING tier 0: flagged (truth: absent)

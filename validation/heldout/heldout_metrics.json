@@ -1,0 +1,428 @@
+{
+ "ayna_version": "0.3.0",
+ "ctd_version": "1.0.2 (commit 051e11e)",
+ "training": "experiments/ctd_tasks (CPU, batch 25)",
+ "relative_truth_commit": "b4e48f4",
+ "runs": [
+  {
+   "sweep": "RandomTarget NODE",
+   "run": "latent_size=10_seed=0_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.010509565995544066,
+    "residual_ratio": 1.080092570438067,
+    "recoverable_z": 1.7569021708763792,
+    "co_bps": 0.017319128810914877,
+    "baseline_co_bps": 0.013991174877780498,
+    "cycle_consistency": 1.0,
+    "input_filter_r2": 0.8559448688435127,
+    "rate_r2": 0.8639830946922302,
+    "state_r2": 0.8828023076057434,
+    "recovery_r2": 0.9051660895347595,
+    "true_input_filter_r2": 0.9370688525346431
+   },
+   "notes": [],
+   "flags": [
+    "INPUT_INHERITED_STRUCTURE"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget NODE",
+   "run": "latent_size=10_seed=1_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": -0.0015526045911900164,
+    "residual_ratio": 1.0730685857274436,
+    "recoverable_z": -0.32520896399524807,
+    "co_bps": 0.017750933841177576,
+    "baseline_co_bps": 0.013991174877780498,
+    "cycle_consistency": 1.0,
+    "input_filter_r2": 0.8390108694939237,
+    "rate_r2": 0.8725482225418091,
+    "state_r2": 0.8684896230697632,
+    "recovery_r2": 0.9048646092414856,
+    "true_input_filter_r2": 0.9370688525346431
+   },
+   "notes": [],
+   "flags": [
+    "INPUT_INHERITED_STRUCTURE"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget NODE",
+   "run": "latent_size=3_seed=0_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.018368133842166203,
+    "residual_ratio": 1.446877564466765,
+    "recoverable_z": 1.8127314496735583,
+    "co_bps": 0.01650762748885353,
+    "baseline_co_bps": 0.013991174877780498,
+    "cycle_consistency": 1.0,
+    "input_filter_r2": 0.9325313683858408,
+    "rate_r2": 0.7246662378311157,
+    "state_r2": 0.962259829044342,
+    "recovery_r2": 0.8735596537590027,
+    "true_input_filter_r2": 0.9370688525346431
+   },
+   "notes": [],
+   "flags": [
+    "INPUT_INHERITED_STRUCTURE"
+   ],
+   "ground_truth_flags": [
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget NODE",
+   "run": "latent_size=3_seed=1_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.02054929892857396,
+    "residual_ratio": 1.4443082078396587,
+    "recoverable_z": 1.963671508668275,
+    "co_bps": 0.01643132792395843,
+    "baseline_co_bps": 0.013991174877780498,
+    "cycle_consistency": 1.0,
+    "input_filter_r2": 0.935362099024233,
+    "rate_r2": 0.7289496064186096,
+    "state_r2": 0.9635989665985107,
+    "recovery_r2": 0.877565324306488,
+    "true_input_filter_r2": 0.9370688525346431
+   },
+   "notes": [],
+   "flags": [
+    "INPUT_INHERITED_STRUCTURE"
+   ],
+   "ground_truth_flags": [
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget NODE",
+   "run": "latent_size=64_seed=0_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.005816922313020484,
+    "residual_ratio": 1.084379618472547,
+    "recoverable_z": 0.8444036803366621,
+    "co_bps": 0.013766985904426383,
+    "baseline_co_bps": 0.013991174877780498,
+    "cycle_consistency": 0.7548767924308777,
+    "input_filter_r2": 0.29661161287146387,
+    "rate_r2": 0.6532956957817078,
+    "state_r2": 0.31501638889312744,
+    "recovery_r2": 0.8788160681724548,
+    "true_input_filter_r2": 0.9370688525346431
+   },
+   "notes": [],
+   "flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget NODE",
+   "run": "latent_size=64_seed=1_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.007225336989402864,
+    "residual_ratio": 1.0773209705163473,
+    "recoverable_z": 1.1498015734505407,
+    "co_bps": 0.013409581011624223,
+    "baseline_co_bps": 0.013991174877780498,
+    "cycle_consistency": 0.7536856532096863,
+    "input_filter_r2": 0.28635388767629544,
+    "rate_r2": 0.6509201526641846,
+    "state_r2": 0.3027782738208771,
+    "recovery_r2": 0.8775146007537842,
+    "true_input_filter_r2": 0.9370688525346431
+   },
+   "notes": [],
+   "flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "3BFF NODE seed 1",
+   "run": "latent_size=3_seed=1_max_epochs=100_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.011025840636888176,
+    "residual_ratio": 2.041462616856422,
+    "recoverable_z": 17.403450697118487,
+    "co_bps": 0.10190156531339663,
+    "baseline_co_bps": 0.10176156344138598,
+    "cycle_consistency": 1.0,
+    "input_filter_r2": 0.09496369631144211,
+    "rate_r2": 0.8273022770881653,
+    "state_r2": 0.9509768486022949,
+    "recovery_r2": 0.8377819061279297,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "notes": [],
+   "flags": [
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "3BFF NODE seed 1",
+   "run": "latent_size=64_seed=1_max_epochs=100_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.005756696455041787,
+    "residual_ratio": 1.6691521355042156,
+    "recoverable_z": 11.289340671819891,
+    "co_bps": 0.10787904964737983,
+    "baseline_co_bps": 0.10176156344138598,
+    "cycle_consistency": 0.6974800229072571,
+    "input_filter_r2": 0.050016319553008004,
+    "rate_r2": 0.862305223941803,
+    "state_r2": 0.6217288970947266,
+    "recovery_r2": 0.8677651286125183,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "notes": [],
+   "flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "3BFF NODE seed 1",
+   "run": "latent_size=8_seed=1_max_epochs=100_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.002971929810374104,
+    "residual_ratio": 1.6994155478173345,
+    "recoverable_z": 8.434021643001149,
+    "co_bps": 0.11245291418440843,
+    "baseline_co_bps": 0.10176156344138598,
+    "cycle_consistency": 0.9516345262527466,
+    "input_filter_r2": 0.12808796554234747,
+    "rate_r2": 0.8974627256393433,
+    "state_r2": 0.9312338829040527,
+    "recovery_r2": 0.899246335029602,
+    "true_input_filter_r2": 0.12490701142723355
+   },
+   "notes": [],
+   "flags": [],
+   "ground_truth_flags": [
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "MultiTask NODE",
+   "run": "latent_size=20_seed=0_max_epochs=25_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.021492800142975214,
+    "residual_ratio": 1.6606970224186195,
+    "recoverable_z": 8.698235339759766,
+    "co_bps": 0.10001088615154276,
+    "baseline_co_bps": 0.07177296781628126,
+    "cycle_consistency": 0.9503173232078552,
+    "input_filter_r2": 0.41604534023344764,
+    "rate_r2": 0.5529292821884155,
+    "state_r2": 0.7462730407714844,
+    "recovery_r2": 0.46969470381736755,
+    "true_input_filter_r2": 0.4063516736092023
+   },
+   "notes": [
+    "teacher trimmed to the model's trials, assuming a prefix-shrunk dataset: train: teacher 6000 -> first 1600 trials; val: teacher 1500 -> first 400 trials"
+   ],
+   "flags": [
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "MultiTask NODE",
+   "run": "latent_size=5_seed=0_max_epochs=25_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.17313838339581267,
+    "residual_ratio": 1.8779222986592894,
+    "recoverable_z": 13.158077352296107,
+    "co_bps": 0.06795385258950319,
+    "baseline_co_bps": 0.07177296781628126,
+    "cycle_consistency": 1.0,
+    "input_filter_r2": 0.6022117625510914,
+    "rate_r2": 0.3768848180770874,
+    "state_r2": 0.8626802563667297,
+    "recovery_r2": 0.3084525763988495,
+    "true_input_filter_r2": 0.4063516736092023
+   },
+   "notes": [
+    "teacher trimmed to the model's trials, assuming a prefix-shrunk dataset: train: teacher 6000 -> first 1600 trials; val: teacher 1500 -> first 400 trials"
+   ],
+   "flags": [
+    "INPUT_INHERITED_STRUCTURE",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "MultiTask NODE",
+   "run": "latent_size=64_seed=0_max_epochs=25_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.01863070194923794,
+    "residual_ratio": 1.5823734145438086,
+    "recoverable_z": 9.103957141639242,
+    "co_bps": 0.10953268349721557,
+    "baseline_co_bps": 0.07177296781628126,
+    "cycle_consistency": 0.8069955110549927,
+    "input_filter_r2": 0.3531098917535693,
+    "rate_r2": 0.6231727600097656,
+    "state_r2": 0.6968151330947876,
+    "recovery_r2": 0.5582709312438965,
+    "true_input_filter_r2": 0.4063516736092023
+   },
+   "notes": [
+    "teacher trimmed to the model's trials, assuming a prefix-shrunk dataset: train: teacher 6000 -> first 1600 trials; val: teacher 1500 -> first 400 trials"
+   ],
+   "flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget LFADS",
+   "run": "kl_co_scale=0_seed=0_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.00865469953587259,
+    "residual_ratio": 1.030875939241248,
+    "recoverable_z": 2.262786213089794,
+    "co_bps": 0.016530235094503076,
+    "baseline_co_bps": 0.018409451593993483,
+    "cycle_consistency": 0.5014426708221436,
+    "input_leakage_r2": 0.8777620196342468,
+    "rollout_r2_autonomous": 0.08463183790445328,
+    "rollout_r2_hold": 0.30260202288627625,
+    "rollout_gap": 0.21797018498182297,
+    "rate_r2": 0.8363679051399231,
+    "state_r2": 0.6467670202255249,
+    "recovery_r2": 0.9094059467315674,
+    "input_r2": 0.7177804708480835,
+    "input_r2_noiseless": 0.7787465453147888
+   },
+   "notes": [],
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget LFADS",
+   "run": "kl_co_scale=1e-2_seed=0_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.025820509619924673,
+    "residual_ratio": 1.1747063206569879,
+    "recoverable_z": 4.188731612111491,
+    "co_bps": 0.017984228969851624,
+    "baseline_co_bps": 0.018409451593993483,
+    "cycle_consistency": 0.318680077791214,
+    "input_leakage_r2": 0.663841187953949,
+    "rollout_r2_autonomous": 0.9993593692779541,
+    "rollout_r2_hold": 0.6674153804779053,
+    "rollout_gap": -0.33194398880004883,
+    "rate_r2": 0.7084409594535828,
+    "state_r2": 0.8310167789459229,
+    "recovery_r2": 0.8950058817863464,
+    "input_r2": 0.5962786674499512,
+    "input_r2_noiseless": 0.6486109495162964
+   },
+   "notes": [],
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE",
+    "UNDERFITTING"
+   ],
+   "ground_truth_flags": [
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  },
+  {
+   "sweep": "RandomTarget LFADS",
+   "run": "kl_co_scale=1e-4_seed=0_max_epochs=150_batch=25",
+   "metrics": {
+    "readout_linearity": 1.0,
+    "recoverable_fraction": 0.007288961110100487,
+    "residual_ratio": 1.1251228786519598,
+    "recoverable_z": 1.790442217359086,
+    "co_bps": 0.020482679170120026,
+    "baseline_co_bps": 0.018409451593993483,
+    "cycle_consistency": 0.44020333886146545,
+    "input_leakage_r2": 0.6353256702423096,
+    "rollout_r2_autonomous": 0.9997445344924927,
+    "rollout_r2_hold": 0.46073228120803833,
+    "rollout_gap": -0.5390122532844543,
+    "rate_r2": 0.8248938322067261,
+    "state_r2": 0.7416551113128662,
+    "recovery_r2": 0.9197845458984375,
+    "input_r2": 0.4239555895328522,
+    "input_r2_noiseless": 0.46156805753707886
+   },
+   "notes": [],
+   "flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "READOUT_NULLSPACE"
+   ],
+   "ground_truth_flags": [
+    "DYNAMICAL_MISATTRIBUTION",
+    "FEATURE_INVENTION",
+    "UNDERFITTING"
+   ]
+  }
+ ]
+}

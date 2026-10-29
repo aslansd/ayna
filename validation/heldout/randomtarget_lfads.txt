@@ -1,0 +1,30 @@
+== select ==
+model            latents    co_bps   cycle   leak  stateR2  rateR2
+------------------------------------------------------------------
+kl_co_scale=0        128    0.0165   0.501   0.88    0.647   0.836 x misattribution
+kl_co_scale=1e-2     128    0.0180   0.319   0.66    0.831   0.708 x misattribution
+kl_co_scale=1e-4     128    0.0205   0.440   0.64    0.742   0.825 <- recommended
+
+WARNING MISATTRIBUTION_EXCLUDED
+  Every model's inferred inputs leak from the preceding state; the recommendation
+  ignores this and should not be trusted until one model passes.
+The best-reconstructing model (kl_co_scale=1e-4_seed=0_max_epochs=150_batch=25) is also the recommended one.
+
+== validation against the task-trained ground truth ==
+3 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+DYNAMICAL_MISATTRIBUTION       0    1    2    0    0       0.33    1.00
+DYNAMICAL_MISATTRIBUTION       1    0    0    1    2        n/a    0.00
+UNDERFITTING                   0    2    0    1    0       1.00    0.67
+
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+DYNAMICAL_MISATTRIBUTION       0    2    1    0    0       0.67    1.00
+DYNAMICAL_MISATTRIBUTION       1    0    0    2    1        n/a    0.00
+UNDERFITTING                   0    1    1    0    1       0.50    1.00
+
+disagreements
+  kl_co_scale=0_seed=0_max_epochs=150_batch=25 DYNAMICAL_MISATTRIBUTION tier 0: flagged (truth: absent)
+  kl_co_scale=1e-2_seed=0_max_epochs=150_batch=25 DYNAMICAL_MISATTRIBUTION tier 0: flagged (truth: absent)
+  kl_co_scale=1e-4_seed=0_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present); DYNAMICAL_MISATTRIBUTION tier 1: missed (truth: present)

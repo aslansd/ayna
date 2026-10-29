@@ -9,11 +9,11 @@ NONLINEAR_READOUT              0    6    0    0   45       1.00    1.00
 UNDERFITTING                   0    9    0    0   42       1.00    1.00
 
 rank agreement with ground truth (Spearman)
-metric                  truth          n     rho  expected
-recoverable_fraction    rate_r2       51   -0.47  negative
-cycle_consistency       state_r2      51    0.45  positive
-input_leakage_r2        input_r2      21   -0.54  negative
-rollout_gap             input_r2      21   -0.18  negative
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2               51   -0.47  negative
+cycle_consistency       state_r2              51    0.45  positive
+input_leakage_r2        input_r2              21   -0.54  negative
+rollout_gap             input_r2              21   -0.18  negative
 
 disagreements
   misattribution_inferred_3          DYNAMICAL_MISATTRIBUTION tier 0: flagged (truth: absent); DYNAMICAL_MISATTRIBUTION tier 1: flagged (truth: absent)

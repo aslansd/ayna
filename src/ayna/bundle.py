@@ -224,8 +224,11 @@ class Bundle:
         return path if path.suffix == ".npz" else path.with_suffix(path.suffix + ".npz")
 
     def summary(self) -> str:
+        lens = ""
+        if self.trial_lens is not None:
+            lens = f" (variable length, {int(self.trial_lens.min())}-{int(self.trial_lens.max())} bins)"
         parts = [
-            f"{self.n_trials} trials x {self.n_bins} bins",
+            f"{self.n_trials} trials x {self.n_bins} bins{lens}",
             f"{self.n_neurons} neurons"
             + (f" ({int(self.heldout.sum())} held-out)" if self.heldout is not None else ""),
             f"{self.n_latents} latents",

@@ -1,0 +1,24 @@
+== select ==
+model          latents    co_bps   cycle  stateR2  rateR2
+---------------------------------------------------------
+latent_size=3        3    0.1019   1.000    0.951   0.827 *front
+latent_size=8        8    0.1125   0.952    0.931   0.897 <- recommended
+latent_size=64      64    0.1079   0.697    0.622   0.862
+
+The best-reconstructing model (latent_size=8_seed=1_max_epochs=100_batch=25) is also the recommended one.
+
+== validation against the task-trained ground truth ==
+3 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    1    0    0    2       1.00    1.00
+INPUT_INHERITED_STRUCTURE      0    0    0    0    3        n/a     n/a
+UNDERFITTING                   0    2    0    1    0       1.00    0.67
+
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    1    0    0    2       1.00    1.00
+UNDERFITTING                   0    1    1    0    1       0.50    1.00
+
+disagreements
+  latent_size=8_seed=1_max_epochs=100_batch=25 UNDERFITTING tier 0: missed (truth: present)

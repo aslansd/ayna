@@ -16,6 +16,7 @@
    if any detector or threshold changed:
    ```bash
    ayna validate --n 10 --seed 7               # synthetic test corpus
+   # and the held-out sweeps: experiments/ctd_tasks/README.md
    ayna ctd $W/node_sweep --model-type SAE --tt $W/tt_3bff --out reports/node
    ayna ctd $W/inputinf_sweep --model-type LFADS --tt $W/tt_3bff --out reports/lfads
    ```
@@ -37,7 +38,7 @@
 7. **Upload, tag, push**:
    ```bash
    twine upload dist/*
-   git tag -a v0.2.0 -m "ayna 0.2.0"
+   git tag -a v0.3.0 -m "ayna 0.3.0"
    git push && git push --tags
    ```
 8. **Verify from PyPI**. The index can serve the old version for a few minutes:

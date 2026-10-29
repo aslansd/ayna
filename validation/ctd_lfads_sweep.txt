@@ -25,12 +25,20 @@ DYNAMICAL_MISATTRIBUTION       0    3    0    3    0       1.00    0.50
 DYNAMICAL_MISATTRIBUTION       1    3    0    3    0       1.00    0.50
 UNDERFITTING                   0    0    0    6    0        n/a    0.00
 
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+DYNAMICAL_MISATTRIBUTION       0    3    0    2    1       1.00    0.60
+DYNAMICAL_MISATTRIBUTION       1    3    0    2    1       1.00    0.60
+UNDERFITTING                   0    0    0    0    6        n/a     n/a
+
 rank agreement with ground truth (Spearman)
-metric                  truth          n     rho  expected
-recoverable_fraction    rate_r2        6   -1.00  negative
-cycle_consistency       state_r2       6    0.94  positive
-input_leakage_r2        input_r2       6   -0.60  negative
-rollout_gap             input_r2       6   -0.94  negative
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2                6   -1.00  negative
+cycle_consistency       state_r2               6    0.94  positive
+input_leakage_r2        input_r2               6   -0.60  negative
+rollout_gap             input_r2               6   -0.94  negative
+input_leakage_r2        input_r2_noiseless     6   -0.60  negative
+rollout_gap             input_r2_noiseless     6   -0.94  negative
 
 disagreements
   kl_co_scale=0_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0 UNDERFITTING tier 0: missed (truth: present)

@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.3.0 — 2026-10-29
+
+Held-out evidence. ayna was run on 15 models it had never seen: CtD NODE and
+LFADS models trained here on RandomTarget, MultiTask and a regenerated 3BFF
+dataset. No detector threshold was changed after seeing them. What held and
+what failed is in VALIDATION.md, and the failures drive the 0.4 roadmap.
+
+### Added
+- **Sweep-relative truth** in `validate` and `ayna ctd`: a fault is present
+  if its truth metric is more than 0.05 below the best model in the sweep.
+  It is reported next to the absolute truth table. It was pre-registered
+  (commit `b4e48f4`) before the 3BFF, MultiTask and LFADS held-out sweeps
+  were scanned.
+- **Noiseless input truth.** Bundles can carry `true_inputs_noiseless`. The
+  CtD adapter exports the teacher's noiseless inputs (applying CtD's trim
+  window), and the misattribution truth uses them, because CtD's Input R²
+  against noisy inputs is capped near 0.2 on 3BFF. `input_r2` is still
+  reported for comparison.
+- **Exact-gradient fixed points.** A dynamics callable may offer `vjp(z, u, v)`
+  and `jacobian(z, u)`. The CtD wrappers provide both through autograd, so
+  the zero-input fixed-point search runs above 32 dimensions.
+- **CtD adapter:**
+  - task-specific teacher classes (`Analysis_TT_MultiTask`,
+    `Analysis_TT_RandomTarget`);
+  - trims the teacher to a prefix-shrunk dataset, with a note;
+  - drops misaligned ground truth instead of failing, with a note.
+- Bundle summaries show variable trial lengths.
+- `experiments/ctd_tasks/`: scripts that generate CtD datasets, shrink them,
+  train NODE and LFADS models on a CPU, and repair pickles, plus the exact
+  grid used.
+
+### Fixed
+- **The tier-1 rollout probe judged supplied inputs.** A state that depends
+  on *supplied* inputs (sensory feedback in a closed-loop task) is genuine
+  input dependence, not misattribution. The probe now runs only for inferred
+  inputs. This was found on RandomTarget, the first held-out task.
+
+### Found (not fixed in 0.3; see ROADMAP.md)
+- In closed-loop tasks, tier-0 lag-1 leakage flags well-inferred inputs
+  (RandomTarget LFADS, KL = 0: leakage 0.88, noiseless Input R² 0.78).
+- Recoverable information lacks power at low spike counts (RandomTarget,
+  z ≈ 1.8).
+- Cycle-consistency cannot see invention the readout can see (RandomTarget
+  NODE-10, MultiTask NODE-20).
+- Info-level `INPUT_INHERITED_STRUCTURE` findings count as flagged in
+  validation, while the truth line uses the warning threshold.
+- CtD's LFADS code is incompatible with PyTorch ≥ 2.7 for *training*
+  (`ReduceLROnPlateau(verbose=...)`).
+
 ## 0.2.0 — 2026-10-17
 
 First contact with trained models. ayna was run on the 12 pretrained 3BFF

@@ -1,55 +1,80 @@
-# Held-out evidence: CtD tasks ayna has never seen
+# Held-out evidence: models ayna had never seen
 
 These scripts produce the models behind the "held-out" section of
 [VALIDATION.md](../../VALIDATION.md). They are not part of the ayna package.
 They run in the CtD environment ([INSTALL.md](../../INSTALL.md)) and train
 models, which ayna itself never does.
 
-The question is whether the 0.2 detectors, designed on CtD's 3BFF
-walkthrough models, hold on models they were not designed on:
+The question: do the 0.2 detectors, designed on CtD's 3BFF walkthrough
+models, hold on models they were not designed on? That means other tasks,
+other seeds, and models trained under a CPU budget. No detector threshold
+was changed after these results were seen. The sweep-relative truth used
+alongside the absolute one was committed (`b4e48f4`) before the 3BFF,
+MultiTask and LFADS sweeps were scanned.
 
-- different tasks: MultiTask, RandomTarget, and 3BFF data generated afresh;
-- different seeds;
-- models trained here, under a CPU budget.
+## What was run
 
-No threshold is changed after looking at these results. If a detector fails
-here, it fails in VALIDATION.md.
+| sweep | model | sizes / settings | seeds | epochs | wall time each* |
+|---|---|---|---|---|---|
+| RandomTarget | NODE, supplied inputs | latent 3, 10, 64 | 0, 1 | 150 | ~24 min |
+| 3BFF (data regenerated from the pretrained teacher) | NODE, supplied inputs | latent 3, 8, 64 | 1 | 100 | ~40 min |
+| MultiTask (first 1600 / 400 trials) | NODE, supplied inputs | latent 5, 20, 64 | 0 | 25 | ~13 min |
+| RandomTarget | LFADS, inferred inputs | controller KL 0, 1e-4, 1e-2 | 0 | 150 | ~85 min |
+
+\* On 2 CPU cores, batch size 25.
 
 ## Steps
 
 ```bash
 export HOME_DIR=/path/to/ComputationThroughDynamicsToolkit/
+# pull pretrained/ with git lfs first (about 1.5 GB)
 
-# 1. teachers: pull pretrained/ with git lfs (about 1.5 GB), then simulate each task's spikes
-python gen_data.py NBFF
+python gen_data.py NBFF            # simulate each task's spikes from its teacher
 python gen_data.py MultiTask
 python gen_data.py RandomTarget
+python shrink_dataset.py tt_MultiTask 1600 400
 
-# 2. NODE autoencoders on CPU: TASK LATENT_SIZE SEED MAX_EPOCHS OUT [BATCH_SIZE]
-python train_node.py RandomTarget 3 0 100 runs 25
+./run_sweep.sh runs                # NODE grid (about 5 h)
+./run_lfads.sh runs                # LFADS grid (about 4.5 h)
 
-# 3. scan, compare and validate against each task's teacher
-ayna ctd runs/RandomTarget --model-type SAE \
-    --tt $HOME_DIR/content/trained_models/task-trained/tt_RandomTarget --out reports/RandomTarget
+T=$HOME_DIR/content/trained_models/task-trained
+ayna ctd runs/RandomTarget       --model-type SAE   --tt $T/tt_RandomTarget --out reports/rt
+ayna ctd runs/RandomTarget_LFADS --model-type LFADS --tt $T/tt_RandomTarget --out reports/rt_lfads
+ayna ctd runs/NBFF               --model-type SAE   --tt $T/tt_3bff         --out reports/nbff
+ayna ctd runs/MultiTask          --model-type SAE   --tt $T/tt_MultiTask    --out reports/mt
 ```
-
-`run_sweep.sh` runs the whole grid used in VALIDATION.md.
 
 ## Differences from CtD's own training
 
-These choices fit a 2-core CPU and 8 GB of RAM. They are recorded in every
-run folder's name:
+These choices fit a 2-core CPU with 8 GB of RAM. Each is recorded in the run
+folder names or below:
 
 - **Batch size 25 instead of 250.** The samples per epoch are the same, but
-  there are 10x more gradient steps. With 250, 60 epochs is about 200
+  there are 10x the gradient steps. With 250, 60 epochs is about 200
   updates and leaves a NODE-8 badly underfit (co-BPS 0.03 vs 0.11 fully
-  trained).
-- **Fewer epochs.** See `run_sweep.sh`. CtD uses 200-1000 on a GPU.
-- **No Ray, no WandB, no plotting callbacks.** The script calls CtD's
+  trained). With 25 it reaches 0.107.
+- **Far fewer epochs than CtD** (200–1000 on a GPU). Many of these models
+  are undertrained, especially MultiTask at 25 epochs. That makes them
+  genuine underfitting cases. It does not make them reproductions of CtD's
+  models.
+- **MultiTask shrunk to its first 1600 train / 400 valid trials**
+  (`shrink_dataset.py`), because the full 7500 trials and the teacher do not
+  fit in 8 GB together. CtD splits trials in order, so a prefix stays aligned
+  with the teacher, and ayna's adapter trims the teacher to match and records
+  that in the bundle notes.
+- **Chunked teacher calls in `gen_data.py`.** Outputs are identical to CtD's
+  `gen_datasets.py`.
+- **No Ray, no WandB, no plotting callbacks.** `train_dd.py` calls CtD's
   `train_PTL` directly with the same model, datamodule and trainer configs.
-- **Chunked teacher calls in `gen_data.py`.** These run the teacher over
-  64 trials at a time so simulation fits in memory. The outputs are
-  identical to CtD's.
+- **A PyTorch compatibility patch.** CtD's LFADS passes `verbose=` to
+  `ReduceLROnPlateau`, which PyTorch ≥ 2.7 rejects. `train_dd.py` drops the
+  argument. The first LFADS runs used a subclass for this, which leaked into
+  their pickles; `fix_pickles.py` repairs them.
 
-PhaseCodedMemory and ChaoticDelayedMatching are not included: see
-VALIDATION.md for why.
+## Not included
+
+**PhaseCodedMemory and ChaoticDelayedMatching.** CtD's simulator needed
+more than about 4 GB to generate their datasets even with chunked teacher
+calls, which is more than this machine had alongside training. On a bigger
+machine, `python gen_data.py PhaseCodedMemory` and the same training steps
+should work unchanged.

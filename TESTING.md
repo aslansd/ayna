@@ -20,7 +20,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-34 tests, under a minute to a few minutes on a laptop CPU. They need no
+36 tests, under a minute to a few minutes on a laptop CPU. They need no
 optional dependency and must all pass in any environment. `test_ctd_live.py`
 is collected too and shows as 1 skipped module when CtD is not importable.
 That is expected.

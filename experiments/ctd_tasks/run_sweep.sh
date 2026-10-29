@@ -4,7 +4,7 @@
 set -u
 OUT=${1:-runs}
 HERE=$(cd "$(dirname "$0")" && pwd)
-train() { python "$HERE/train_node.py" "$@" "$OUT" 25 2>&1 | grep -E "^trained|Error" ; }
+train() { python "$HERE/train_dd.py" "$@" "$OUT" 25 2>&1 | grep -E "^trained|Error" ; }
 # task          latent seed epochs
 for d in 3 10 64; do for s in 0 1; do
   [ -d "$OUT/RandomTarget/latent_size=${d}_seed=${s}_max_epochs=150_batch=25" ] || train RandomTarget $d $s 150; done; done

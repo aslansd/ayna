@@ -1,0 +1,30 @@
+== select ==
+model          latents    co_bps   cycle  stateR2  rateR2
+---------------------------------------------------------
+latent_size=5        5    0.0680   1.000    0.863   0.377 *front
+latent_size=20      20    0.1000   0.950    0.746   0.553 <- recommended
+latent_size=64      64    0.1095   0.807    0.697   0.623 *front
+
+WARNING RECONSTRUCTION_TRAP
+  The best-reconstructing model latent_size=64_seed=0_max_epochs=25_batch=25 gains
+  +0.0095 co_bps over latent_size=20_seed=0_max_epochs=25_batch=25 but its cycle-
+  consistency is 0.81 vs 0.95. Ranking by reconstruction alone would pick a model whose
+  extra latent structure the data do not constrain. Ground truth agrees: State R² 0.70
+  vs 0.75.
+
+== validation against the task-trained ground truth ==
+3 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    1    0    2    0       1.00    0.33
+INPUT_INHERITED_STRUCTURE      0    0    2    0    1       0.00     n/a
+UNDERFITTING                   0    3    0    0    0       1.00    1.00
+
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    1    0    1    1       1.00    0.50
+UNDERFITTING                   0    2    1    0    0       0.67    1.00
+
+disagreements
+  latent_size=20_seed=0_max_epochs=25_batch=25 FEATURE_INVENTION tier 0: missed (truth: present); INPUT_INHERITED_STRUCTURE tier 0: flagged (truth: absent)
+  latent_size=5_seed=0_max_epochs=25_batch=25 FEATURE_INVENTION tier 0: missed (truth: present); INPUT_INHERITED_STRUCTURE tier 0: flagged (truth: absent)

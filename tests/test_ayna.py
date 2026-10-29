@@ -418,3 +418,19 @@ def test_ctd_adapter_applies_trim_window_to_noiseless_inputs():
 
     b = from_ctd(_FakeDD(), TrimTT(), with_dynamics=False)
     assert b.true_inputs_noiseless is not None and b.true_inputs_noiseless.shape[1] == 30
+
+
+def test_sweep_relative_truth():
+    from ayna.validate import Validation
+
+    def case(name, rate, flagged):
+        return {"name": name, "truth": {"UNDERFITTING": rate < 0.9},
+                "pred": {"UNDERFITTING": {0: flagged}}, "disagreements": [],
+                "metrics": {"rate_r2": rate}}
+
+    v = Validation([case("a", 0.87, False), case("b", 0.80, True), case("c", 0.85, False)])
+    rel = v.relative_truth()
+    assert [rel[i]["UNDERFITTING"] for i in range(3)] == [False, True, False]   # best 0.87, line 0.82
+    assert v.table(relative=True)[("UNDERFITTING", 0)] == {"tp": 1, "fp": 0, "fn": 0, "tn": 2}
+    assert v.table()[("UNDERFITTING", 0)] == {"tp": 1, "fp": 0, "fn": 2, "tn": 0}            # absolute 0.90 line
+    assert Validation(v.cases, relative_margin=None).relative_truth() == {0: {}, 1: {}, 2: {}}

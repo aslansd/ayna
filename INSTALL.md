@@ -76,7 +76,7 @@ python -m venv ctd-env && source ctd-env/bin/activate
 pip install torch                                     # CPU is enough
 pip install pytorch-lightning torchmetrics h5py gymnasium hydra-core omegaconf \
             python-dotenv matplotlib scikit-learn scipy plotly geotorch "ray[tune]" wandb
-pip install --no-deps motornet==0.2.0                 # imported by CtD's task code
+pip install --no-deps motornet==0.2.0                 # CtD's task code; the RandomTarget teacher needs it
 pip install --no-deps -e /path/to/ComputationThroughDynamicsToolkit
 pip install ayna
 ```
@@ -107,3 +107,8 @@ in one process ran out of 8 GB. One run peaks at about 6 GB.
 | `ModuleNotFoundError: ray` / `wandb` | referenced by the pickles | install them (step 2) |
 | trial lengths all zero, or `IndexError` in `get_trial_lens` | CtD quirk for fixed-length data | ayna treats trials as full length |
 | numbers differ slightly between exports | CtD leaves models in training mode, so dropout is active | ayna calls `model.eval()` first |
+| ground truth differs slightly between exports | CtD's noisy teachers resample their noise on every call | ayna seeds torch and numpy before export |
+| MultiTask / RandomTarget teachers fail to load or index | they use task-specific analysis classes | ayna picks `Analysis_TT_MultiTask` / `Analysis_TT_RandomTarget` from the teacher folder name |
+| teacher has more trials than the model | dataset was shrunk to a prefix (see `experiments/ctd_tasks`) | ayna trims the teacher and records it in the bundle notes |
+| `ReduceLROnPlateau ... unexpected keyword argument 'verbose'` when *training* LFADS | CtD code vs PyTorch ≥ 2.7 | only affects training; see `experiments/ctd_tasks/train_dd.py` |
+| dataset generation killed for PhaseCodedMemory / ChaoticDelayedMatching | CtD's simulator needs more than about 4 GB | use a machine with more RAM |

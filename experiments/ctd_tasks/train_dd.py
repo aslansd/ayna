@@ -8,7 +8,8 @@ Run inside the CtD environment with HOME_DIR set to the CtD repository and the
 task's dataset generated (gen_data.py). Saves model.pkl + datamodule.pkl under
 OUT/<task>/latent_size=<D>_seed=<S>_max_epochs=<E>/ -- a run folder `ayna ctd` reads.
 
-    python train_node.py TASK LATENT_SIZE SEED MAX_EPOCHS OUT [BATCH_SIZE]
+    python train_dd.py TASK LATENT_SIZE SEED MAX_EPOCHS OUT [BATCH_SIZE]
+    MODEL=LFADS KL_CO=1e-4 python train_dd.py TASK 0 SEED MAX_EPOCHS OUT [BATCH_SIZE]
 
 CtD trains with batch size 250 (about 3 updates per epoch on 800 training
 trials) for 500-1000 epochs on a GPU. On a CPU budget the same number of
@@ -27,6 +28,18 @@ warnings.filterwarnings("ignore")
 import torch  # noqa: E402
 
 torch.set_num_threads(int(os.environ.get("TORCH_THREADS", "2")))
+
+# CtD's LFADS passes verbose= to ReduceLROnPlateau; PyTorch >= 2.7 removed that argument.
+# Patch the constructor in place (not a subclass), so pickled models still reference
+# torch's own class and load anywhere.
+_plateau_init = torch.optim.lr_scheduler.ReduceLROnPlateau.__init__
+
+
+def _plateau_init_compat(self, *args, verbose=None, **kwargs):
+    _plateau_init(self, *args, **kwargs)
+
+
+torch.optim.lr_scheduler.ReduceLROnPlateau.__init__ = _plateau_init_compat
 HOME = Path(os.environ["HOME_DIR"])
 os.chdir(HOME / "ctd" / "data_modeling")       # CtD resolves config paths from here
 from ctd.data_modeling.train_PTL import train_PTL  # noqa: E402
@@ -79,6 +92,4 @@ def main(task, latent, seed, epochs, out, batch=None):
 
 
 if __name__ == "__main__":
-    a = sys.argv[1:]
-    # run_sweep.sh passes OUT then BATCH after the four positional values
-    main(*a[:6])
+    main(*sys.argv[1:7])
