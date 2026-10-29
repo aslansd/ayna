@@ -8,6 +8,13 @@ ROADMAP.md
 TESTING.md
 VALIDATION.md
 pyproject.toml
+experiments/ctd_tasks/README.md
+experiments/ctd_tasks/fix_pickles.py
+experiments/ctd_tasks/gen_data.py
+experiments/ctd_tasks/run_lfads.sh
+experiments/ctd_tasks/run_sweep.sh
+experiments/ctd_tasks/shrink_dataset.py
+experiments/ctd_tasks/train_dd.py
 src/ayna/__init__.py
 src/ayna/bundle.py
 src/ayna/cli.py
@@ -34,3 +41,8 @@ validation/ctd_node_sweep.txt
 validation/ctd_walkthrough_metrics.json
 validation/synthetic_seed0.txt
 validation/synthetic_seed7.txt
+validation/heldout/heldout_metrics.json
+validation/heldout/multitask_node.txt
+validation/heldout/nbff_node_seed1.txt
+validation/heldout/randomtarget_lfads.txt
+validation/heldout/randomtarget_node.txt

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: ayna
-Version: 0.2.0
+Version: 0.3.0
 Summary: Know whether your inferred neural dynamics are real, before you interpret them. Diagnoses underfitting, feature invention and dynamical misattribution in data-driven dynamics models.
 Author: Aslan Satary Dizaji
 License-Expression: Apache-2.0
@@ -73,30 +73,34 @@ is no ground truth, and reconstruction alone points the wrong way. ayna runs
 every check your outputs allow, says which ones it could not run, and gets
 sharper when you give it more.
 
-## What it found on CtD's own trained models
+## How much to trust it
 
-ayna 0.2 was run on the 12 pretrained 3BFF models that ship with CtD, using
-no ground truth for its verdicts. It was then scored against the
-task-trained teacher.
+ayna has been tested on two sets of trained models. The tables, and every
+miss, are in [VALIDATION.md](VALIDATION.md).
 
-- **NODE latent-size sweep.** Every verdict agrees with ground truth (12 of
-  12):
-  - NODE-3 and NODE-5 are flagged `UNDERFITTING`;
-  - NODE-16, -32 and -64 are flagged `FEATURE_INVENTION`;
-  - NODE-8 is clean.
+**CtD's 12 pretrained 3BFF models (0.2).**
 
-  `select` recommends NODE-8 and reports that the best-co-BPS model (NODE-64)
-  is a trap. Ground truth agrees: State R² 0.56 vs 0.96.
-- **LFADS controller-KL sweep.** ayna flags `DYNAMICAL_MISATTRIBUTION` on the
-  three lowest-KL models, which CtD's paper describes as offloading dynamics
-  to inputs. `select` recommends KL = 1e-4, the model with the best Input R².
-  Ranked by reconstruction alone, it would have picked a misattributed model.
-- **Where it falls short.** On LFADS, every model sits close to the synthetic
-  truth lines, so the binary tables disagree even where the ranks agree
-  (Spearman −0.94 to −1.00). One seed, one task: this is evidence that the
-  detectors are not broken, not a calibration.
-- **Along the way:** CtD's own co-BPS code includes 47 held-in neurons in its
-  "held-out" set. Details are in [VALIDATION.md](VALIDATION.md).
+- NODE sweep: every verdict agrees with ground truth.
+- `select` picks NODE-8 and flags NODE-64 as a reconstruction trap.
+- LFADS sweep: ayna flags the three low-KL models CtD's paper describes as
+  misattributed.
+
+The 0.2 detectors were redesigned on these models, so this is not a
+held-out test.
+
+**15 held-out models (0.3).** These are NODE and LFADS models trained for
+this purpose on RandomTarget, MultiTask and a regenerated 3BFF dataset. No
+threshold was changed after seeing them.
+
+| detector | held up | failed |
+|---|---|---|
+| `FEATURE_INVENTION` | never wrong when it fires | misses invention the readout can see |
+| `UNDERFITTING` | reliable on 3BFF and MultiTask | underpowered at RandomTarget's low spike counts |
+| `INPUT_INHERITED_STRUCTURE` | correct on 4 of 6 RandomTarget models, the closed-loop case it exists for | misses models whose latents are mostly invented; two info-level false positives on MultiTask |
+| `DYNAMICAL_MISATTRIBUTION` | — | tier-0 leakage false-alarms in closed-loop tasks: there, true sensory inputs *are* predictable from the state |
+
+**Along the way:** CtD's own co-BPS code includes 47 held-in neurons in its
+"held-out" set.
 
 ---
 
@@ -162,15 +166,17 @@ teacher.
 | `FEATURE_INVENTION` | Can the latents be regenerated from the model's own rates (cycle-consistency)? Reports *which latent PCs* cannot. Comparative only for models with a readout bottleneck (LFADS factors). | 0 |
 | `READOUT_NULLSPACE` | Are there latent directions the readout ignores, where invention could hide later? | 0 |
 | `NONLINEAR_READOUT` | Is the latent→log-rate map far from linear? If so, a nonlinear cycle-consistency replaces the linear one. | 0 |
-| `DYNAMICAL_MISATTRIBUTION` *(experimental)* | Does the state *before* each inferred input predict it (lag-1 leakage)? With inputs clamped to zero, do the model's own dynamics lose a state that simply holding would keep? | 0 / 1 |
+| `DYNAMICAL_MISATTRIBUTION` *(experimental)* | Does the state *before* each inferred input predict it (lag-1 leakage)? With inferred inputs clamped to zero, do the model's own dynamics lose a state that simply holding would keep? **Not reliable in closed-loop tasks.** | 0 / 1 |
 | `INPUT_INHERITED_STRUCTURE` | With supplied inputs, how much of the latent variance is just a short filter of the inputs? | 0 |
 | `RECONSTRUCTION_TRAP` | In a sweep, is the best-reconstructing model off the reconstruction × simplicity knee? (`ayna select`) | 0 |
 | `MISATTRIBUTION_EXCLUDED` | In a sweep, which models must not be recommended however well they reconstruct? (`ayna select`) | 0 |
 
 The misattribution probes are ayna's own. CtD lists a ground-truth-free
 input-accuracy metric as future work. In closed-loop tasks, where sensory
-feedback depends on the model's output, true inputs can legitimately depend
-on the preceding state, so read that finding with the task in mind.
+feedback depends on the model's output, true inputs legitimately depend on
+the preceding state. On the held-out RandomTarget LFADS models, tier-0
+leakage flagged a model whose inputs were well inferred. Do not trust that
+finding there.
 
 ---
 
