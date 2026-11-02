@@ -66,8 +66,11 @@ threshold was changed after seeing them.
 | `INPUT_INHERITED_STRUCTURE` | correct on 4 of 6 RandomTarget models, the closed-loop case it exists for | misses models whose latents are mostly invented; two info-level false positives on MultiTask |
 | `DYNAMICAL_MISATTRIBUTION` | — | tier-0 leakage false-alarms in closed-loop tasks: there, true sensory inputs *are* predictable from the state |
 
-**Along the way:** CtD's own co-BPS code includes 47 held-in neurons in its
-"held-out" set.
+**Along the way:** ayna found that CtD's co-BPS counted 47 held-in neurons as
+held-out. It was reported in
+[CtD #16](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/issues/16)
+and fixed in
+[PR #18](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/pull/18).
 
 ---
 

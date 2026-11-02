@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+- The CtD co-BPS slicing bug that ayna 0.2 found was reported as
+  [CtD #16](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/issues/16)
+  and fixed upstream in
+  [PR #18](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/pull/18).
+  README, VALIDATION.md and ROADMAP.md now say so.
+
 ## 0.3.0 — 2026-10-29
 
 Held-out evidence. ayna was run on 15 models it had never seen: CtD NODE and

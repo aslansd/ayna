@@ -283,7 +283,7 @@ evidence.
   cycle-consistency thresholds;
 - would have recommended a misattributed LFADS model in `select`.
 
-### A bug found in CtD along the way
+### A bug found in CtD along the way (fixed upstream)
 
 `ctd/comparison/comparison.py` computes co-BPS on
 `inf_rates_val[..., n_input_neurons:]`, where
@@ -296,6 +296,15 @@ On the NODE-8 model, CtD's code gives 0.1262. The true held-out neurons give
 0.1132. ayna's co-BPS matches the latter to within 1e-4, and
 `tests/test_ctd_live.py` checks this. Using
 `get_model_inputs(phase)[0].shape[-1]`, the held-in spike count, fixes it.
+
+This was reported as
+[CtD #16](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/issues/16).
+The CtD team confirmed it and fixed it in
+[PR #18](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/pull/18),
+using the same split point and adding regression tests. Run through
+`Comparison.compute_metrics` on this NODE-8 model, the PR gives 0.1131 and
+`main` at `051e11e` gives 0.1261. CtD's own co-BPS caches computed before the
+fix need recomputing from the saved models; no retraining is needed.
 
 ## 3. Synthetic corpus
 

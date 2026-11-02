@@ -30,7 +30,8 @@ faults and `validate`. A daftar provenance extra.
 - `select` no longer recommends models flagged for misattribution.
 - `ayna ctd`: scan and validate a CtD sweep in place, one subprocess per run.
 - Tier-1 dynamics wrappers for CtD's NODE and LFADS cells.
-- Found and reproduced a co-BPS slicing bug in CtD's comparison code.
+- Found and reproduced a co-BPS slicing bug in CtD's comparison code
+  (reported as CtD #16, fixed upstream in PR #18).
 
 ### 0.3 — held-out evidence
 - **Models ayna had never seen.** Trained on a 2-core CPU from CtD's
