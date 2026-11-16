@@ -140,13 +140,17 @@ teacher.
 | `INPUT_INHERITED_STRUCTURE` | With supplied inputs, how much of the latent variance is just a short filter of the inputs? | 0 |
 | `RECONSTRUCTION_TRAP` | In a sweep, is the best-reconstructing model off the reconstruction × simplicity knee? (`ayna select`) | 0 |
 | `MISATTRIBUTION_EXCLUDED` | In a sweep, which models must not be recommended however well they reconstruct? (`ayna select`) | 0 |
+| `SEED_INCONSISTENCY` | In a sweep with several seeds per configuration, can each model's latents be mapped affinely onto a sibling seed's (best R² ≥ 0.90)? Catches invention the readout *can* see, which cycle-consistency misses. (`ayna select`) | 0 |
 
 The misattribution probes are ayna's own. CtD lists a ground-truth-free
 input-accuracy metric as future work. In closed-loop tasks, where sensory
 feedback depends on the model's output, true inputs legitimately depend on
 the preceding state. On the held-out RandomTarget LFADS models, tier-0
-leakage flagged a model whose inputs were well inferred. Do not trust that
-finding there.
+leakage flagged a model whose inputs were well inferred. Declare such a task
+with `meta["closed_loop"] = True` (or `--closed-loop` on `ayna scan` and
+`ayna ctd`): leakage is then reported as information only, and `select` does
+not exclude the model. ayna has no working misattribution detector for
+closed-loop tasks yet; see [VALIDATION.md](VALIDATION.md).
 
 ---
 
@@ -164,7 +168,8 @@ One `.npz` per fitted model. Rates are expected counts **per bin**.
 | `trial_lens` | (R,) int | for padded trials |
 | `inputs` | (R, T, U) | with `meta["inputs_kind"]` = `supplied` or `inferred` |
 | `true_latents`, `true_rates`, `true_inputs` | | ground truth (tier 2) |
-| `meta` | JSON string | name, model, bin size, `readout_bottleneck`, anything |
+| `true_inputs_noiseless` | | noiseless inputs, preferred as misattribution truth |
+| `meta` | JSON string | name, model, bin size, `readout_bottleneck`, `closed_loop`, anything |
 
 ```python
 from ayna import Bundle
