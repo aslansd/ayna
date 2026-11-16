@@ -1,0 +1,56 @@
+[1/6] latent_size=3_seed=2_max_epochs=100_batch=25
+    flags: UNDERFITTING | ground truth: UNDERFITTING
+[2/6] latent_size=3_seed=3_max_epochs=100_batch=25
+    flags: UNDERFITTING | ground truth: UNDERFITTING
+[3/6] latent_size=64_seed=2_max_epochs=100_batch=25
+    flags: FEATURE_INVENTION, UNDERFITTING | ground truth: FEATURE_INVENTION, UNDERFITTING
+[4/6] latent_size=64_seed=3_max_epochs=100_batch=25
+    flags: FEATURE_INVENTION, UNDERFITTING | ground truth: FEATURE_INVENTION, UNDERFITTING
+[5/6] latent_size=8_seed=2_max_epochs=100_batch=25
+    flags: UNDERFITTING | ground truth: UNDERFITTING
+[6/6] latent_size=8_seed=3_max_epochs=100_batch=25
+    flags: UNDERFITTING | ground truth: UNDERFITTING
+
+== select ==
+model                 latents    co_bps   cycle  seeds  stateR2  rateR2
+-----------------------------------------------------------------------
+latent_size=3_seed=2        3    0.1030   1.000   0.96    0.953   0.833
+latent_size=3_seed=3        3    0.1046   1.000   0.96    0.964   0.845
+latent_size=8_seed=2        8    0.1121   1.000   0.92    0.939   0.891 <- recommended
+latent_size=8_seed=3        8    0.1103   1.000   0.92    0.925   0.876
+latent_size=64_seed=2      64    0.1078   0.713   0.82    0.612   0.866
+latent_size=64_seed=3      64    0.1079   0.674   0.84    0.610   0.863
+
+WARNING SEED_INCONSISTENCY
+  2 model(s) have latent structure that no other seed of the same configuration
+  reproduces (best cross-seed R² below 0.9):
+  latent_size=64_seed=2_max_epochs=100_batch=25 (0.82),
+  latent_size=64_seed=3_max_epochs=100_batch=25 (0.84). Structure that is in the data
+  should be reproducible across seeds; seed-specific structure is likely invented, even
+  when the readout uses it and cycle-consistency is high.
+The best-reconstructing model (latent_size=8_seed=2_max_epochs=100_batch=25) is also the recommended one.
+
+== validation against the task-trained ground truth ==
+6 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    2    0    0    4       1.00    1.00
+FEATURE_INVENTION+SEEDS        0    2    0    0    4       1.00    1.00
+INPUT_INHERITED_STRUCTURE      0    0    0    0    6        n/a     n/a
+SEED_INCONSISTENCY             0    2    0    0    4       1.00    1.00
+UNDERFITTING                   0    6    0    0    0       1.00    1.00
+
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    2    0    0    4       1.00    1.00
+FEATURE_INVENTION+SEEDS        0    2    0    0    4       1.00    1.00
+SEED_INCONSISTENCY             0    2    0    0    4       1.00    1.00
+UNDERFITTING                   0    1    5    0    0       0.17    1.00
+
+rank agreement with ground truth (Spearman)
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2                6   -0.54  negative
+cycle_consistency       state_r2               6    0.85  positive
+seed_consistency        state_r2               6    0.89  positive
+
+per-run reports, select and validation written to out04_nbff/

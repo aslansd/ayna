@@ -8,11 +8,13 @@ ROADMAP.md
 TESTING.md
 VALIDATION.md
 pyproject.toml
+experiments/ctd_tasks/PREREGISTRATION_0.4.md
 experiments/ctd_tasks/README.md
 experiments/ctd_tasks/fix_pickles.py
 experiments/ctd_tasks/gen_data.py
 experiments/ctd_tasks/run_lfads.sh
 experiments/ctd_tasks/run_sweep.sh
+experiments/ctd_tasks/run_sweep_04.sh
 experiments/ctd_tasks/shrink_dataset.py
 experiments/ctd_tasks/train_dd.py
 src/ayna/__init__.py
@@ -46,3 +48,7 @@ validation/heldout/multitask_node.txt
 validation/heldout/nbff_node_seed1.txt
 validation/heldout/randomtarget_lfads.txt
 validation/heldout/randomtarget_node.txt
+validation/heldout04/3bff_node.txt
+validation/heldout04/3bff_node_metrics.json
+validation/heldout04/randomtarget_node.txt
+validation/heldout04/randomtarget_node_metrics.json

@@ -9,16 +9,133 @@ There are three kinds of evidence, and they answer different questions:
 - **Synthetic corpus** (`ayna validate`). Do the detectors find faults that
   were deliberately injected? ayna's own simulator injects them and the same
   author wrote the detectors, so this tests design, not transfer.
+- **Pre-registered test** (0.4, `ayna ctd`). Do the 0.4 changes do what
+  was written down before the test? These are 12 fresh models trained after
+  the expectations were committed (section 1).
 - **Held-out trained models** (0.3, `ayna ctd`). Do the detectors hold on
   models, tasks and seeds they were not designed on? These are 15 models
-  trained for this purpose (section 1).
+  trained for this purpose (section 2).
 - **CtD's pretrained models** (0.2, `ayna ctd`). Do the detectors agree with
   ground truth on models that were actually trained? These are CtD's 12
   pretrained 3BFF models, scored against the task-trained teacher. The 0.2
   detectors were redesigned on them, so they are not a held-out test
-  (section 2).
+  (section 3).
 
-## 1. Held-out models (0.3)
+## 1. Pre-registered test of 0.4 (12 fresh models)
+
+The 0.4 changes were written after the 0.3 held-out results (section 2), so
+those results cannot test them. They were tested instead on 12 new NODE
+models: RandomTarget and 3BFF, latent sizes {3, 10 or 8, 64}, seeds {2, 3}.
+These seeds were never used before. The expectations, the grid, the truth
+lines and the failure criteria were committed in
+[`PREREGISTRATION_0.4.md`](experiments/ctd_tasks/PREREGISTRATION_0.4.md)
+(commit `1a75502`) before any of the 12 models was trained. No threshold
+was changed after the results.
+
+**Two of the four pre-registered criteria failed.** The details follow.
+
+| change | pre-registered expectation | result |
+|---|---|---|
+| cross-fitted recoverable information | catches the RandomTarget underfits 0.3 missed, no new false positives on 3BFF | **failed.** Power is fixed (z 1.8 → 9.5), but one RandomTarget underfit is still missed, and 3BFF gains false positives under relative truth |
+| `INPUT_INHERITED_STRUCTURE` counts only at warning level | no info-level "flags" | **held.** None in 12 models; the two 0.3 MultiTask false positives become true negatives by definition |
+| `SEED_INCONSISTENCY` | catches invention cycle-consistency misses, never flags the sweep's best-State-R² model | **failed, narrowly.** Never flags the best model and catches 5 of 6 invention cases, but of the 2 that cycle-consistency misses (RandomTarget NODE-10) it catches only seed 2; seed 3 is at 0.91 |
+| `closed_loop` flag | (no LFADS in this grid; applied to the saved 0.3 RandomTarget LFADS results) | removes all three tier-0 false alarms, leaving no working misattribution detector there (below) |
+
+### RandomTarget NODE, seeds 2 and 3 (6 models)
+
+Seeds is the best affine R² from the sibling seed's latents.
+
+| model | co-BPS | baseline | recoverable (z) | cycle | seeds | ayna flags | Rate R² | State R² | truth: absolute / relative |
+|---|---|---|---|---|---|---|---|---|---|
+| latent 3, s2 | 0.017 | 0.014 | 3.7% (9.3) | 1.00 | 0.99 | underfit, inherited | 0.729 | 0.969 | underfit, inherited / underfit |
+| latent 3, s3 | 0.017 | 0.014 | 3.9% (9.8) | 1.00 | 0.99 | underfit, inherited | 0.729 | 0.969 | underfit, inherited / underfit |
+| latent 10, s2 | 0.018 | 0.014 | 0.2% (1.1) | 1.00 | **0.90** | inherited, seeds | 0.864 | 0.870 | all three / invention |
+| latent 10, s3 | 0.018 | 0.014 | 0.3% (1.8) | 1.00 | 0.91 | inherited | 0.867 | 0.887 | all three / invention |
+| latent 64, s2 | 0.015 | 0.014 | 0.1% (0.7) | **0.73** | **0.46** | invention, seeds | 0.658 | 0.324 | all three / underfit, invention |
+| latent 64, s3 | 0.014 | 0.014 | 0.2% (1.4) | **0.75** | **0.45** | invention, seeds, underfit | 0.644 | 0.307 | all three / underfit, invention |
+
+NODE-10 seed 2 shows 0.90 in the table; unrounded it is 0.896.
+
+- **Cross-fitting fixed the power problem it was aimed at.** NODE-3 has
+  3.7–3.9% recoverable information at z 9.3–9.8, against z ≈ 1.8 for the
+  same configuration in 0.3. Both are now caught.
+- **NODE-64 seed 2 is still missed.** Its poor rates are not recoverable
+  from other neurons (0.1%), so this is a kind of underfitting the test
+  cannot see. Seed 3 is caught only because its co-BPS falls just below
+  the baseline (0.0139 vs 0.0140).
+- **Seed consistency ranks the sweep exactly as State R² does** (Spearman
+  1.00), against 0.85 for cycle-consistency. It catches NODE-10 seed 2
+  (cycle 1.00, State R² 0.870), the 0.3 blind spot, and misses seed 3 at
+  0.909 (State R² 0.887).
+- **`select` recommends NODE-10 seed 2**, the best co-BPS, even though it
+  is flagged seed-inconsistent. In 0.4, `SEED_INCONSISTENCY` warns but does
+  not exclude. Whether it should exclude is a 0.5 question, since this
+  result cannot be used to decide it.
+- **`INPUT_INHERITED_STRUCTURE` is right on four of six.** On NODE-64 the
+  latents are mostly invented (State R² 0.31), so the filter R² is low
+  (0.29–0.30), though the ground truth inherits.
+
+### 3BFF NODE, seeds 2 and 3 (6 models)
+
+| model | co-BPS | recoverable (z) | cycle | seeds | ayna flags | Rate R² | State R² | truth: absolute / relative |
+|---|---|---|---|---|---|---|---|---|
+| latent 3, s2 | 0.103 | 1.1% (34) | 1.00 | 0.96 | underfit | 0.833 | 0.953 | underfit / underfit |
+| latent 3, s3 | 0.105 | 1.0% (38) | 1.00 | 0.96 | underfit | 0.845 | 0.964 | underfit / — |
+| latent 8, s2 | 0.112 | 0.50% (24) | 1.00 | 0.92 | underfit | 0.891 | 0.939 | underfit / — |
+| latent 8, s3 | 0.110 | 0.8% (20) | 1.00 | 0.92 | underfit | 0.876 | 0.925 | underfit / — |
+| latent 64, s2 | 0.108 | 1.2% (34) | **0.71** | **0.82** | invention, seeds, underfit | 0.866 | 0.612 | underfit, invention / invention |
+| latent 64, s3 | 0.108 | 0.6% (27) | **0.67** | **0.84** | invention, seeds, underfit | 0.863 | 0.610 | underfit, invention / invention |
+
+- **`select` recommends NODE-8 seed 2**, which is also the best Rate R²
+  model, as on CtD's own sweep and the 0.3 seed.
+- **Invention is right on all six**, by cycle-consistency and by seed
+  consistency independently.
+- **`UNDERFITTING` flags all six.** That is right under the absolute line,
+  because every model is below Rate R² 0.90. Under relative truth five are
+  false positives, and two of them are new: in 0.3, NODE-8 at 0.3% (z 8)
+  was not flagged. Cross-fitting raised both the estimate and the power,
+  and NODE-8 seed 2 now sits exactly on the 0.5% line.
+- **This is the limit of an absolute test.** Recoverable information asks
+  whether the model leaves predictable structure in the spikes. These
+  models all do, a little. It cannot ask whether another model in the same
+  sweep did better. That question belongs to `select`, not to a per-model
+  detector (ROADMAP 0.5).
+
+### The `closed_loop` flag on the 0.3 RandomTarget LFADS models
+
+These are the same three models and saved results as section 2, with
+`closed_loop` declared:
+
+| KL scale | lag-1 leakage | tier 0 (0.3 → 0.4) | tier 1 | Input R² (noiseless) | absolute / relative truth |
+|---|---|---|---|---|---|
+| 0 | 0.88 | flagged → informational | — | 0.779 | clean / clean |
+| 1e-4 | 0.64 | flagged → informational | — | 0.462 | misattributed / misattributed |
+| 1e-2 | 0.66 | flagged → informational | — | 0.649 | clean / misattributed |
+
+- **The false alarm on KL = 0 is gone.**
+- **So are the two correct flags.** The tier-1 rollout is quiet on all
+  three, so KL = 1e-4 is missed under both truths and KL = 1e-2 under
+  relative truth.
+- **ayna has no working misattribution detector for closed-loop tasks.**
+  The flag stops it from being wrong, but does not make it right.
+  `select` no longer excludes these models.
+
+### 0.4 scorecard (12 fresh models)
+
+TP / FP / FN / TN, summed over both sweeps.
+
+| detector | absolute truth | relative truth | verdict |
+|---|---|---|---|
+| `FEATURE_INVENTION` | 4 / 0 / 2 / 6 | 4 / 0 / 2 / 6 | Never wrong when it fires. Blind to readout-visible invention. |
+| `SEED_INCONSISTENCY` | 5 / 0 / 1 / 6 | 5 / 0 / 1 / 6 | Never wrong when it fires. Sees some invention that cycle-consistency misses (1 of 2 here). Needs two or more seeds. |
+| `FEATURE_INVENTION+SEEDS` | 5 / 0 / 1 / 6 | 5 / 0 / 1 / 6 | Use both. |
+| `UNDERFITTING` | 9 / 0 / 3 / 0 | 4 / 5 / 1 / 2 | Answers "is anything left in the spikes?", not "is this the best in the sweep?". |
+| `INPUT_INHERITED_STRUCTURE` | 4 / 0 / 2 / 6 | — | Fails only where the latents are invented. |
+
+Every number in this section is in
+[`validation/heldout04/`](validation/heldout04/).
+
+## 2. Held-out models (0.3)
 
 These are 15 models ayna's detectors had never seen. They were trained in
 this project on a 2-core CPU from CtD's pretrained teachers
@@ -172,7 +289,7 @@ TP / FP / FN / TN.
 
 Every number in this section is in [`validation/heldout/`](validation/heldout/).
 
-## 2. CtD's pretrained 3BFF walkthrough models (0.2)
+## 3. CtD's pretrained 3BFF walkthrough models (0.2)
 
 CtD 1.0.2 (commit `051e11e`), `examples/walkthrough_models/`:
 
@@ -306,7 +423,7 @@ using the same split point and adding regression tests. Run through
 `main` at `051e11e` gives 0.1261. CtD's own co-BPS caches computed before the
 fix need recomputing from the saved models; no retraining is needed.
 
-## 3. Synthetic corpus
+## 4. Synthetic corpus
 
 `ayna validate --n 10 --seed 7` gives 85 bundles. The cases are 3-bit
 flip-flop and input-driven systems with one or two faults, injected at

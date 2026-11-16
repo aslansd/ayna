@@ -38,7 +38,7 @@
 7. **Upload, tag, push**:
    ```bash
    twine upload dist/*
-   git tag -a v0.3.0 -m "ayna 0.3.0"
+   git tag -a v0.4.0 -m "ayna 0.4.0"
    git push && git push --tags
    ```
 8. **Verify from PyPI**. The index can serve the old version for a few minutes:

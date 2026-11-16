@@ -5,8 +5,8 @@
 Fixes for what the 0.3 held-out set exposed, tested on 12 fresh models
 (RandomTarget and 3BFF NODE, new seeds). The tests were pre-registered in
 `experiments/ctd_tasks/PREREGISTRATION_0.4.md` (commit `1a75502`) before any
-of the 12 models was trained. Two of the four pre-registered criteria failed,
-narrowly; VALIDATION.md section 1 has the details.
+of the 12 models was trained. Two of the four pre-registered criteria failed;
+VALIDATION.md section 1 has the details.
 
 ### Added
 - **`SEED_INCONSISTENCY`** (in `select` and `ayna ctd`). For runs that differ

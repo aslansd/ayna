@@ -42,7 +42,7 @@ sharper when you give it more.
 
 ## How much to trust it
 
-ayna has been tested on two sets of trained models. The tables, and every
+ayna has been tested on three sets of trained models. The tables, and every
 miss, are in [VALIDATION.md](VALIDATION.md).
 
 **CtD's 12 pretrained 3BFF models (0.2).**
@@ -55,16 +55,21 @@ miss, are in [VALIDATION.md](VALIDATION.md).
 The 0.2 detectors were redesigned on these models, so this is not a
 held-out test.
 
-**15 held-out models (0.3).** These are NODE and LFADS models trained for
-this purpose on RandomTarget, MultiTask and a regenerated 3BFF dataset. No
-threshold was changed after seeing them.
+**15 held-out models (0.3)**, trained for this purpose on RandomTarget,
+MultiTask and a regenerated 3BFF dataset. No threshold was changed after
+seeing them. Their failures drove 0.4.
+
+**12 fresh models for a pre-registered test of 0.4.** These are
+RandomTarget and 3BFF NODE models with new seeds. The expectations were
+committed before training, and two of the four criteria failed.
 
 | detector | held up | failed |
 |---|---|---|
-| `FEATURE_INVENTION` | never wrong when it fires | misses invention the readout can see |
-| `UNDERFITTING` | reliable on 3BFF and MultiTask | underpowered at RandomTarget's low spike counts |
-| `INPUT_INHERITED_STRUCTURE` | correct on 4 of 6 RandomTarget models, the closed-loop case it exists for | misses models whose latents are mostly invented; two info-level false positives on MultiTask |
-| `DYNAMICAL_MISATTRIBUTION` | — | tier-0 leakage false-alarms in closed-loop tasks: there, true sensory inputs *are* predictable from the state |
+| `FEATURE_INVENTION` | never wrong when it fires (27 held-out models) | misses invention the readout can see |
+| `SEED_INCONSISTENCY` (new) | never wrong when it fires; 5 of 6 invention cases; caught RandomTarget NODE-10 seed 2, which cycle-consistency misses | missed NODE-10 seed 3 at 0.91; needs two or more seeds |
+| `UNDERFITTING` | cross-fitting fixed RandomTarget's low power (z 1.8 → 9.5) | absolute, not sweep-relative: flags every 3BFF model, which is true below Rate R² 0.90 but not useful for choosing; blind to errors other neurons cannot predict |
+| `INPUT_INHERITED_STRUCTURE` | correct whenever the latents are not invented | misses models whose latents are mostly invented |
+| `DYNAMICAL_MISATTRIBUTION` | CtD's 3BFF LFADS sweep | **no working detector for closed-loop tasks**: declare `closed_loop` to stop tier-0 false alarms, but then nothing flags the misattributed model |
 
 **Along the way:** ayna found that CtD's co-BPS counted 47 held-in neurons as
 held-out. It was reported in

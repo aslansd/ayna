@@ -54,38 +54,53 @@ faults and `validate`. A daftar provenance extra.
 - **CtD adapter:** prefix-shrunk datasets, task-specific teacher classes,
   CtD's trim window applied to the noiseless inputs.
 
-## Next: 0.4 — what the held-out set says to fix
+### 0.4 — fixes for the 0.3 held-out failures, tested on fresh models
 
-Each item below is a failure seen in 0.3. A fix tuned on these same models
-needs another fresh set to be believed.
+- **Pre-registered** (commit `1a75502`) before 12 fresh NODE models were
+  trained: RandomTarget and 3BFF, 3 sizes, seeds 2 and 3. Two of the four
+  criteria failed. [VALIDATION.md](VALIDATION.md) section 1 has the details.
+- **Cross-fitted recoverable information.** RandomTarget NODE-3 went from
+  z ≈ 1.8 to z ≈ 9.5.
+- **`SEED_INCONSISTENCY`**: cross-seed affine latent consistency, the first
+  check that sees invention the readout uses.
+- **`closed_loop` declaration** for tier-0 input leakage.
+- `INPUT_INHERITED_STRUCTURE` is counted at warning level only.
+- `ayna ctd --resume`.
 
-- **Underfitting at low spike counts.** On RandomTarget, recoverable
-  information was large (1–2%), but the per-trial test never reached z = 3
-  (z ≈ 1.8). Options: pool across neurons before testing, or use the
-  baseline comparison alone when spikes are sparse.
-- **Invention the readout can see.** Cycle-consistency only detects latent
-  structure the rates ignore. RandomTarget NODE-10 and MultiTask NODE-20
-  have State R² 0.75–0.88 with cycle-consistency ≥ 0.95. Candidates: seed
-  consistency, which needs seeds, and comparison against a simpler model's
-  latents.
-- **Info-level findings count as "flagged" in validation.** For
-  `INPUT_INHERITED_STRUCTURE`, that produced two MultiTask false positives
-  at filter R² 0.42–0.60, below the 0.70 warning line that the truth uses.
-- **Closed-loop tasks and input leakage.** The 0.2 open question is now
-  answered. On RandomTarget LFADS, KL = 0, lag-1 leakage is 0.88 and flags
-  misattribution, yet the inputs are well inferred (Input R² 0.78 against
-  noiseless inputs). True sensory feedback depends on the state. The tier-1
-  rollout stayed clean. Proposal: a declared `meta["closed_loop"]` that
-  makes tier-0 leakage informational and lets tier 1 decide.
-- **More seeds.** One or two per configuration is not enough for
-  run-to-run spread.
+## Next: 0.5 — what the 0.4 test says to fix
+
+As before, a fix tuned on these models needs another fresh set to be
+believed.
+
+- **A misattribution detector for closed-loop tasks.** With `closed_loop`
+  declared, tier 0 is informational and tier 1 is quiet, so RandomTarget
+  LFADS KL = 1e-4 (noiseless Input R² 0.46) goes unflagged. Candidates:
+  - leakage measured against a model trained without inferred inputs on
+    the same data, which separates "the feedback is predictable" from
+    "the dynamics moved into the inputs";
+  - a rollout that feeds the model's own predicted feedback back in.
+- **Underfitting relative to the sweep.** The per-model test answers "is
+  anything left in the spikes?". On 3BFF it says yes for every model, which
+  is true, but five of the six are within 0.05 of the sweep's best Rate R².
+  `select` should report how much more each model leaves than the best
+  model, alongside the absolute test.
+- **Underfitting the spikes cannot reveal.** RandomTarget NODE-64 seed 2
+  has Rate R² 0.66 but only 0.1% recoverable information. Its errors are
+  not predictable from other neurons. The baseline comparison catches
+  seed 3 only by 0.0001 bits/spike.
+- **Should `select` exclude seed-inconsistent models?** It recommended
+  RandomTarget NODE-10 seed 2, which is flagged seed-inconsistent. Deciding
+  that needs a test written before the data.
+- **Seed consistency with more seeds.** Two seeds give one comparison per
+  model. With three or more, the median would be more stable than the
+  best, which matters for NODE-10 seed 3 at 0.909.
 - **PhaseCodedMemory and ChaoticDelayedMatching.** CtD's simulator needs
   more than about 4 GB to generate their datasets even with chunked teacher
   calls, more than this machine had alongside training. On a bigger machine,
   `gen_data.py` should just work.
 - **Real recordings.** An NWB / Neural Latents Benchmark reader, with
-  MC_Maze as the worked example. The DANDI archive was not reachable from
-  the 0.3 build environment, so this needs a local copy of the data.
+  MC_Maze as the worked example. The DANDI archive has not been reachable
+  from the build environment, so this needs a local copy of the data.
 
 ## Later
 

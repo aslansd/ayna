@@ -20,7 +20,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-36 tests, under a minute to a few minutes on a laptop CPU. They need no
+43 tests, under a minute to a few minutes on a laptop CPU. They need no
 optional dependency and must all pass in any environment. `test_ctd_live.py`
 is collected too and shows as 1 skipped module when CtD is not importable.
 That is expected.
@@ -121,6 +121,25 @@ ayna ctd runs/RandomTarget_LFADS --model-type LFADS --tt $T/tt_RandomTarget --ou
 ayna ctd runs/NBFF               --model-type SAE   --tt $T/tt_3bff         --out reports/nbff
 ayna ctd runs/MultiTask          --model-type SAE   --tt $T/tt_MultiTask    --out reports/mt
 ```
+
+Add `--resume` to finish a sweep that was interrupted: runs that already
+have a report in `--out` are skipped.
+
+## 5. Pre-registered test of 0.4
+
+[`experiments/ctd_tasks/run_sweep_04.sh`](experiments/ctd_tasks/run_sweep_04.sh)
+trains the 12 models: RandomTarget and 3BFF NODE, 3 sizes, seeds 2 and 3.
+That takes about 6 hours on a 2-core CPU when nothing else is running.
+Check them against
+[`PREREGISTRATION_0.4.md`](experiments/ctd_tasks/PREREGISTRATION_0.4.md):
+
+```bash
+ayna ctd runs04/RandomTarget --model-type SAE --tt $T/tt_RandomTarget --out reports/rt04
+ayna ctd runs04/NBFF         --model-type SAE --tt $T/tt_3bff         --out reports/nbff04
+```
+
+Seed consistency appears automatically, because the runs differ only in
+`seed=`.
 
 ## Before a release
 
