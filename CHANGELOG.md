@@ -1,13 +1,50 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-16
+
+Fixes for what the 0.3 held-out set exposed, tested on 12 fresh models
+(RandomTarget and 3BFF NODE, new seeds). The tests were pre-registered in
+`experiments/ctd_tasks/PREREGISTRATION_0.4.md` (commit `1a75502`) before any
+of the 12 models was trained. Two of the four pre-registered criteria failed,
+narrowly; VALIDATION.md section 1 has the details.
+
+### Added
+- **`SEED_INCONSISTENCY`** (in `select` and `ayna ctd`). For runs that differ
+  only in seed, it finds the best affine R² from any sibling seed's latents
+  to this model's latents, and warns below 0.90. It catches invention the
+  readout *can* see, which cycle-consistency misses. On fresh RandomTarget
+  models it ranks the sweep exactly as State R² does (Spearman 1.00).
+  `select` shows it as a `seeds` column. `validate` scores it, alone and as
+  `FEATURE_INVENTION+SEEDS`, against invention truth.
+- **`closed_loop` declaration** (`meta["closed_loop"]`, `--closed-loop` on
+  `ayna scan` and `ayna ctd`). In closed-loop tasks, tier-0 lag-1 input
+  leakage becomes information only, and `select` does not exclude the model.
+- `ayna ctd --resume` skips runs that already have a report, to finish an
+  interrupted sweep.
+- The `ayna ctd` workers save each run's latents (`latents.npz`, float16)
+  for seed consistency.
+- Synthetic fault `visible_invention`: an invented latent that the readout
+  uses weakly, so cycle-consistency stays high.
+- `experiments/ctd_tasks/run_sweep_04.sh` and the pre-registration.
+
+### Changed
+- **`UNDERFITTING`: recoverable information is cross-fitted** over all
+  trials (5 folds) instead of fitted on training trials and scored on
+  validation trials. Thresholds are unchanged (0.5%, z ≥ 3). On fresh
+  RandomTarget NODE-3 models, z went from about 1.8 in 0.3 to about 9.5.
+  `folds=None` restores the 0.3 behaviour.
+- **`INPUT_INHERITED_STRUCTURE` counts as flagged in validation only at
+  warning level** (filter R² ≥ 0.70), matching its truth line. Info-level
+  findings are still reported.
 
 ### Docs
 - The CtD co-BPS slicing bug that ayna 0.2 found was reported as
   [CtD #16](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/issues/16)
   and fixed upstream in
   [PR #18](https://github.com/snel-repo/ComputationThroughDynamicsToolkit/pull/18).
-  README, VALIDATION.md and ROADMAP.md now say so.
+- VALIDATION.md: a 0.4 held-out section, and the closed-loop flag applied
+  to the 0.3 RandomTarget LFADS models. ayna has no working misattribution
+  detector for closed-loop tasks.
 
 ## 0.3.0 — 2026-10-29
 
