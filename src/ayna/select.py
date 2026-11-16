@@ -43,10 +43,12 @@ class SelectReport:
 
         has_gt = any("state_r2" in r for r in self.rows)
         has_leak = any("input_leakage_r2" in r for r in self.rows)
+        has_seed = any("seed_consistency" in r for r in self.rows)
         label = _distinct([r["name"] for r in self.rows])
         w = max(5, min(max(len(v) for v in label.values()), 44))
         head = f"{'model':<{w}}{'latents':>8}{self.recon_metric:>10}{'cycle':>8}"
         head += f"{'leak':>7}" if has_leak else ""
+        head += f"{'seeds':>7}" if has_seed else ""
         head += f"{'stateR2':>9}{'rateR2':>8}" if has_gt else ""
         lines = [head, "-" * len(head)]
         for r in sorted(self.rows, key=lambda r: (r.get("latent_dim") or 0, r["name"])):
@@ -61,6 +63,8 @@ class SelectReport:
             line = f"{_short(label[r['name']], w):<{w}}{str(r.get('latent_dim', '')):>8}{r['recon']:>10.4f}{r['cycle']:>8.3f}"
             if has_leak:
                 line += f"{r.get('input_leakage_r2', float('nan')):>7.2f}"
+            if has_seed:
+                line += f"{r.get('seed_consistency', float('nan')):>7.2f}"
             if has_gt:
                 line += f"{r.get('state_r2', float('nan')):>9.3f}{r.get('rate_r2', float('nan')):>8.3f}"
             lines.append(line + mark)
@@ -172,7 +176,39 @@ def select_row(b: Bundle, use_heldout: bool = True) -> dict:
         from .probes import input_leakage
 
         row["input_leakage_r2"] = float(input_leakage(b)["input_leakage_r2"])
+        if b.meta.get("closed_loop"):
+            row["closed_loop"] = True    # leakage expected; never a reason to exclude
     return row
+
+
+SEED_CONSISTENCY_R2 = 0.90   # pre-registered in 0.4, before any fresh model was scanned
+
+
+def config_key(name: str) -> str:
+    """A model's configuration with its seed removed: models sharing a key are seeds of one config."""
+    import re
+
+    key = re.sub(r"(^|[_\-])seed=?\d+", "", name)
+    key = re.sub(r"_s\d+$", "", key)
+    return key.strip("_-") or name
+
+
+def seed_groups(names) -> dict:
+    groups = {}
+    for n in names:
+        groups.setdefault(config_key(n), []).append(n)
+    return {k: v for k, v in groups.items() if len(v) >= 2}
+
+
+def consistency_for(latents: dict, val, trial_lens=None) -> dict:
+    """Seed consistency per model, computed within each group of seeds (see probes.seed_consistency)."""
+    from .probes import seed_consistency
+
+    out = {}
+    for _, members in seed_groups(list(latents)).items():
+        res = seed_consistency({m: latents[m] for m in members}, val, trial_lens)
+        out.update(res.get("seed_consistency", {}))
+    return out
 
 
 def select(bundles, cycle_gap: float = 0.1) -> SelectReport:
@@ -181,10 +217,18 @@ def select(bundles, cycle_gap: float = 0.1) -> SelectReport:
     if len(bundles) < 2:
         raise ValueError("select needs at least two models")
     use_heldout = all(b.heldout is not None for b in bundles)
-    return select_from_rows([select_row(b, use_heldout) for b in bundles], cycle_gap)
+    rows = [select_row(b, use_heldout) for b in bundles]
+    same_trials = len({(b.n_trials, b.n_bins) for b in bundles}) == 1
+    consistency = None
+    if same_trials and seed_groups([b.name for b in bundles]):
+        consistency = consistency_for({b.name: b.latents for b in bundles}, bundles[0].val,
+                                      bundles[0].trial_lens)
+    return select_from_rows(rows, cycle_gap, consistency=consistency)
 
 
-def select_from_rows(rows: list, cycle_gap: float = 0.1, leakage_r2: float = 0.5) -> SelectReport:
+def select_from_rows(rows: list, cycle_gap: float = 0.1, leakage_r2: float = 0.5,
+                     consistency: dict | None = None,
+                     consistency_r2: float = SEED_CONSISTENCY_R2) -> SelectReport:
     """Pareto front, knee and RECONSTRUCTION_TRAP from precomputed rows (see :func:`select_row`).
 
     Models whose inferred inputs leak from the preceding state (``input_leakage_r2``
@@ -193,6 +237,9 @@ def select_from_rows(rows: list, cycle_gap: float = 0.1, leakage_r2: float = 0.5
     reconstruction cannot be the judge for them.
     """
     rows = [dict(r) for r in rows]
+    for r in rows:
+        if consistency and r["name"] in consistency:
+            r["seed_consistency"] = float(consistency[r["name"]])
     if len(rows) < 2:
         raise ValueError("select needs at least two models")
     metrics = {r.get("recon_metric", "co_bps") for r in rows}
@@ -212,7 +259,8 @@ def select_from_rows(rows: list, cycle_gap: float = 0.1, leakage_r2: float = 0.5
         return (x - x.min()) / span if span > 0 else np.ones_like(x)
 
     nr, nc = norm(recon), norm(cyc)
-    excluded = [i for i, r in enumerate(rows) if r.get("input_leakage_r2", 0.0) > leakage_r2]
+    excluded = [i for i, r in enumerate(rows)
+                if not r.get("closed_loop") and r.get("input_leakage_r2", 0.0) > leakage_r2]
     eligible = [i for i in range(len(rows)) if i not in excluded]
     if not eligible:
         eligible, excluded_note = list(range(len(rows))), True
@@ -251,4 +299,14 @@ def select_from_rows(rows: list, cycle_gap: float = 0.1, leakage_r2: float = 0.5
         rep.findings.append(Finding("RECONSTRUCTION_TRAP", "warning", 0, what=text,
                                     where=f"{best['name']} vs {knee['name']}",
                                     fix=f"Prefer {knee['name']} or another model on the Pareto front."))
+    low = [r for r in rows if r.get("seed_consistency", 1.0) < consistency_r2]
+    if low:
+        names_c = ", ".join(f"{r['name']} ({r['seed_consistency']:.2f})" for r in low)
+        rep.findings.append(Finding(
+            "SEED_INCONSISTENCY", "warning", 0,
+            what=(f"{len(low)} model(s) have latent structure that no other seed of the same configuration "
+                  f"reproduces (best cross-seed R² below {consistency_r2}): {names_c}. Structure that is in the "
+                  "data should be reproducible across seeds; seed-specific structure is likely invented, "
+                  "even when the readout uses it and cycle-consistency is high."),
+            fix="Do not interpret the seed-specific part; prefer a configuration whose seeds agree."))
     return rep

@@ -72,6 +72,8 @@ def cmd_scan(args):
     from . import provenance
 
     b = load_bundle(args.bundle)
+    if args.closed_loop:
+        b.meta["closed_loop"] = True
     th = Thresholds().update(_overrides(args.set))
     if args.daftar and not provenance.available():
         print("daftar is not installed; run `pip install \"ayna[provenance]\"`", file=sys.stderr)
@@ -192,6 +194,8 @@ def cmd_ctd(args):
             cmd.append("--save-bundle")
         if args.no_dynamics:
             cmd.append("--no-dynamics")
+        if args.closed_loop:
+            cmd.append("--closed-loop")
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
             tail = (proc.stderr or proc.stdout).strip().splitlines()[-1:] or ["killed (out of memory?)"]
@@ -208,12 +212,15 @@ def cmd_ctd(args):
     summary = []
     rows = [json.loads((r.parent / "select_row.json").read_text()) for r in reports
             if (r.parent / "select_row.json").exists()]
+    consistency = _ctd_seed_consistency([r.parent for r in reports])
     if len(rows) >= 2:
-        rep = select_from_rows(rows)
+        rep = select_from_rows(rows, consistency=consistency)
         rep.save(out)
         summary += ["== select ==", rep.render_text()]
     if args.tt:
         val = Validation([case_from_report_json(r) for r in reports])
+        if consistency:
+            val.add_seed_consistency(consistency)
         val.save(out)
         summary += ["== validation against the task-trained ground truth ==", val.render_text()]
     if failed:
@@ -223,6 +230,31 @@ def cmd_ctd(args):
     print("\n" + text)
     print(f"per-run reports, select and validation written to {out}/")
     return 1 if failed else 0
+
+
+def _ctd_seed_consistency(run_dirs) -> dict:
+    """Seed consistency across the runs `ayna ctd` just scanned, from the latents each worker saved."""
+    import numpy as np
+
+    from .select import SEED_CONSISTENCY_R2, consistency_for, seed_groups  # noqa: F401
+
+    names = [d.name for d in run_dirs]
+    if not seed_groups(names):
+        return {}
+    latents, val, lens = {}, None, None
+    for d in run_dirs:
+        f = d / "latents.npz"
+        if not f.exists():
+            continue
+        with np.load(f) as z:
+            latents[d.name] = z["latents"]
+            val = z["val"] if val is None else val
+            lens = (z["trial_lens"] if len(z["trial_lens"]) else None) if lens is None else lens
+    shapes = {v.shape[:2] for v in latents.values()}
+    if len(shapes) != 1:
+        print("seed consistency skipped: runs do not share trials", file=sys.stderr)
+        return {}
+    return consistency_for(latents, val, lens)
 
 
 def cmd_doctor(args):
@@ -267,6 +299,8 @@ def build_parser():
     s.add_argument("--set", nargs="*", metavar="NAME=VALUE", help="override thresholds")
     s.add_argument("--no-nonlinear", action="store_true", help="skip the nonlinear cycle-consistency fallback")
     s.add_argument("--daftar", action="store_true", help="record the scan with daftar")
+    s.add_argument("--closed-loop", action="store_true",
+                   help="declare a closed-loop task: tier-0 input leakage becomes informational")
     s.set_defaults(fn=cmd_scan)
 
     s = sub.add_parser("select", help="compare a sweep of models fitted to the same data")
@@ -302,6 +336,9 @@ def build_parser():
     s.add_argument("--out", default="ctd_reports")
     s.add_argument("--save-bundles", action="store_true", help="also write each run as a bundle.npz (large)")
     s.add_argument("--no-dynamics", action="store_true", help="skip tier-1 probes")
+    s.add_argument("--closed-loop", action="store_true",
+                   help="declare a closed-loop task (true inputs depend on the state): tier-0 input leakage "
+                        "becomes informational")
     s.add_argument("--set", nargs="*", metavar="NAME=VALUE")
     s.set_defaults(fn=cmd_ctd)
 

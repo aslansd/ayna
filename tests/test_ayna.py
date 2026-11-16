@@ -242,7 +242,7 @@ def test_recoverable_information_separates_underfit():
 
     assert not flagged(clean)  # small recording: fraction can exceed 0.5% by chance, z cannot
     assert flagged(under)
-    assert under["recoverable_split"] == "held-in -> held-out"
+    assert under["recoverable_split"].startswith("held-in -> held-out")
 
 
 def test_recoverable_information_without_heldout_uses_neuron_split():
@@ -434,3 +434,72 @@ def test_sweep_relative_truth():
     assert v.table(relative=True)[("UNDERFITTING", 0)] == {"tp": 1, "fp": 0, "fn": 0, "tn": 2}
     assert v.table()[("UNDERFITTING", 0)] == {"tp": 1, "fp": 0, "fn": 2, "tn": 0}            # absolute 0.90 line
     assert Validation(v.cases, relative_margin=None).relative_truth() == {0: {}, 1: {}, 2: {}}
+
+
+# ================================================================ 0.4 additions
+def test_recoverable_information_is_cross_fitted():
+    from ayna import probes as P
+
+    r = P.recoverable_information(synth("c", [], seed=11, **SMALL))
+    assert r["recoverable_trials"] == SMALL["n_trials"]              # every trial scored
+    assert "cross-fitted" in r["recoverable_split"]
+    r0 = P.recoverable_information(synth("c", [], seed=11, **SMALL), folds=None)
+    assert r0["recoverable_trials"] < SMALL["n_trials"]              # 0.3 behaviour: validation trials only
+
+
+def test_closed_loop_makes_leakage_informational():
+    b = synth("m", ["misattribution=0.9"], seed=41, **SMALL)
+    b.dynamics = None
+    assert "DYNAMICAL_MISATTRIBUTION" in scan(b).flagged()
+    b.meta["closed_loop"] = True
+    r = scan(b)
+    assert "DYNAMICAL_MISATTRIBUTION" not in r.flagged()
+    chk = next(c for c in r.checks if c.id == "DYNAMICAL_MISATTRIBUTION" and c.tier == 0)
+    assert chk.status == "not_assessed" and "closed-loop" in chk.reason
+    f = next(f for f in r.findings if f.id == "DYNAMICAL_MISATTRIBUTION" and f.tier == 0)
+    assert f.severity == "info"
+
+
+def test_select_does_not_exclude_closed_loop_leakage():
+    from ayna.select import select_from_rows
+
+    rows = [{"name": "a", "recon": 0.13, "cycle": 0.5, "recon_metric": "co_bps", "input_leakage_r2": 0.9,
+             "closed_loop": True},
+            {"name": "b", "recon": 0.12, "cycle": 0.4, "recon_metric": "co_bps", "input_leakage_r2": 0.9,
+             "closed_loop": True}]
+    assert select_from_rows(rows).excluded == []
+
+
+def test_input_inherited_info_is_not_flagged():
+    b = synth("s", [], seed=42, inputs_kind="supplied", **SMALL)
+    th = Thresholds().update({"inherited_info": 0.0, "inherited_warning": 0.999})   # force an info finding
+    r = scan(b, th)
+    assert any(f.id == "INPUT_INHERITED_STRUCTURE" and f.severity == "info" for f in r.findings)
+    assert "INPUT_INHERITED_STRUCTURE" not in r.flagged()
+
+
+def test_seed_consistency_catches_readout_visible_invention():
+    from ayna import metrics as M
+    from ayna.synth import make_model_outputs, make_truth
+
+    t = make_truth("flipflop", 120, 60, 40, 10, seed=43)
+    clean = [make_model_outputs(t, 8, {}, None, 0.12, seed=s, name=f"clean_s{s}") for s in (1, 2)]
+    vis = [make_model_outputs(t, 8, {"visible_invention": 0.3}, None, 0.12, seed=s, name=f"vis_s{s}")
+           for s in (1, 2)]
+    b = vis[0]
+    cc, *_ = M.cycle_consistency(b.flat("latents", "train"), b.flat("rates", "train"), b.flat("latents", "val"))
+    assert cc > 0.95                                               # cycle-consistency cannot see it
+    rep = select(clean + vis)
+    seeds = {r["name"]: r["seed_consistency"] for r in rep.rows}
+    assert min(seeds["clean_s1"], seeds["clean_s2"]) > 0.95
+    assert max(seeds["vis_s1"], seeds["vis_s2"]) < 0.9
+    f = next(f for f in rep.findings if f.id == "SEED_INCONSISTENCY")
+    assert "vis_s1" in f.what and "clean" not in f.what
+
+
+def test_config_key_groups_seeds():
+    from ayna.select import config_key, seed_groups
+
+    assert config_key("latent_size=10_seed=2_max_epochs=150_batch=25") == "latent_size=10_max_epochs=150_batch=25"
+    assert config_key("node8_s0") == "node8"
+    assert seed_groups(["a_seed=0", "a_seed=1", "b_seed=0"]) == {"a": ["a_seed=0", "a_seed=1"]}

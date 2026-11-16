@@ -99,18 +99,24 @@ def baseline_co_bps(b: Bundle, sigmas=(1.0, 2.0, 4.0), n_pcs: int = 10, seed: in
 
 
 def recoverable_information(b: Bundle, sigma: float = 2.0, n_pcs: int = 10, l2: float = 1e-2,
-                            seed: int = 0) -> dict:
+                            seed: int = 0, folds: int = 5) -> dict:
     """Information about one set of neurons, present in another set's spikes, that the model left unused.
 
     For each target neuron, a Poisson GLM takes the model's own log-rate as a
     fixed offset and adds smoothed, square-rooted spikes of *source* neurons as
-    features. The gain in validation bits per spike over the model alone is
-    information the data carry and the model missed. Poisson noise is
-    independent across neurons, so source spikes cannot predict target noise.
+    features. The gain in bits per spike over the model alone is information
+    the data carry and the model missed. Poisson noise is independent across
+    neurons, so source spikes cannot predict target noise.
 
     The same fit with source features taken from *other trials* (shuffled
     trial identity, same time structure) is subtracted, so per-neuron gain or
     time-locked corrections do not count as recoverable information.
+
+    Cross-fitted (0.4): trials are split into ``folds`` groups, and each group
+    is scored by GLMs fitted on the others, so every trial contributes to the
+    estimate and to its significance test. 0.3 scored the validation trials
+    only, which left the test underpowered at low spike counts (RandomTarget:
+    2% recoverable information at z = 1.8). ``folds=None`` reproduces 0.3.
 
     Source/target: held-in -> held-out when held-out neurons exist; otherwise
     two random halves of the neurons, both directions, averaged.
@@ -122,54 +128,68 @@ def recoverable_information(b: Bundle, sigma: float = 2.0, n_pcs: int = 10, l2: 
         split = "held-in -> held-out"
     else:
         perm = rng.permutation(N)
-        a, c = np.sort(perm[: N // 2]), np.sort(perm[N // 2:])
-        pairs = [(a, c), (c, a)]
+        a_, c_ = np.sort(perm[: N // 2]), np.sort(perm[N // 2:])
+        pairs = [(a_, c_), (c_, a_)]
         split = "neuron halves, both directions"
-    tr, va = b.bin_mask("train"), b.bin_mask("val")
-    shuffle = np.arange(b.n_trials)
-    trn, van = np.where(b.trials("train"))[0], np.where(b.trials("val"))[0]
-    shuffle[trn] = rng.permutation(trn)
-    shuffle[van] = rng.permutation(van)
-    trial_of_sample = np.nonzero(va)[0]
-    gains, controls, model_bps, n_spikes = [], [], [], []
+    valid = b.bin_mask("all")
+    if folds is None:            # 0.3 behaviour: fit on train trials, score validation trials
+        fold_of = np.where(b.trials("val"), 0, -1)
+        n_folds = 1
+    else:
+        n_folds = int(folds)
+        fold_of = np.empty(b.n_trials, int)
+        fold_of[rng.permutation(b.n_trials)] = np.arange(b.n_trials) % n_folds
+    shuffle = rng.permutation(b.n_trials)
     per_trial_net = np.zeros(b.n_trials)
+    scored = np.zeros(b.n_trials, bool)
+    tot = {"gain": 0.0, "control": 0.0, "spikes": 0.0, "base_ll": 0.0, "null_ll": 0.0}
     for src, tgt in pairs:
         feat = np.sqrt(gaussian_filter1d(b.spikes[:, :, src].astype(float), sigma, axis=1))
-        Y_tr = b.spikes[:, :, tgt][tr].astype(float)
-        Y_va = b.spikes[:, :, tgt][va].astype(float)
-        O_tr = np.log(np.maximum(b.rates[:, :, tgt][tr], 1e-9))
-        O_va = np.log(np.maximum(b.rates[:, :, tgt][va], 1e-9))
-        base = np.exp(O_va)
-        ll_base = np.sum(Y_va * O_va - base, axis=1)
-        nsp = Y_va.sum()
-        out = []
-        for f in (feat, feat[shuffle]):
-            k = min(n_pcs, len(src))
-            pca = PCA(k).fit(f[tr][:: max(1, int(tr.sum()) // 50000)])
-            pred = poisson_glm_predict(pca.transform(f[tr]), Y_tr, pca.transform(f[va]), l2=l2,
-                                       offset_fit=O_tr, offset_eval=O_va)
-            out.append(np.sum(Y_va * np.log(pred) - pred, axis=1) - ll_base)   # per-sample LL gain
-        gains.append(out[0].sum() / (nsp * np.log(2)))
-        controls.append(out[1].sum() / (nsp * np.log(2)))
-        per_trial_net += np.bincount(trial_of_sample, weights=out[0] - out[1], minlength=b.n_trials)
-        model_bps.append(bits_per_spike(base, Y_va))
-        n_spikes.append(nsp)
-    w = np.asarray(n_spikes) / np.sum(n_spikes)
-    gain = float(np.dot(w, gains))
-    control = float(np.dot(w, controls))
-    mbps = float(np.dot(w, model_bps))
+        feats = (feat, feat[shuffle])
+        for k in range(n_folds):
+            ev_trials = fold_of == k
+            fit_trials = (fold_of != k) if folds is not None else b.trials("train")
+            fit = valid & fit_trials[:, None]
+            ev = valid & ev_trials[:, None]
+            if not ev.any() or not fit.any():
+                continue
+            Y_fit = b.spikes[:, :, tgt][fit].astype(float)
+            Y_ev = b.spikes[:, :, tgt][ev].astype(float)
+            O_fit = np.log(np.maximum(b.rates[:, :, tgt][fit], 1e-9))
+            O_ev = np.log(np.maximum(b.rates[:, :, tgt][ev], 1e-9))
+            base = np.exp(O_ev)
+            ll_base = np.sum(Y_ev * O_ev - base, axis=1)
+            out = []
+            for f in feats:
+                kk = min(n_pcs, len(src))
+                pca = PCA(kk).fit(f[fit][:: max(1, int(fit.sum()) // 50000)])
+                pred = poisson_glm_predict(pca.transform(f[fit]), Y_fit, pca.transform(f[ev]), l2=l2,
+                                           offset_fit=O_fit, offset_eval=O_ev)
+                out.append(np.sum(Y_ev * np.log(pred) - pred, axis=1) - ll_base)   # per-sample LL gain
+            trial_of_sample = np.nonzero(ev)[0]
+            per_trial_net += np.bincount(trial_of_sample, weights=out[0] - out[1], minlength=b.n_trials)
+            scored |= ev_trials
+            tot["gain"] += out[0].sum()
+            tot["control"] += out[1].sum()
+            tot["spikes"] += Y_ev.sum()
+            tot["base_ll"] += ll_base.sum()
+            mean_rate = Y_ev.mean(axis=0, keepdims=True)
+            tot["null_ll"] += np.sum(Y_ev * np.log(np.maximum(mean_rate, 1e-9)) - mean_rate)
+    denom = tot["spikes"] * np.log(2) if tot["spikes"] else np.nan
+    gain, control = tot["gain"] / denom, tot["control"] / denom
+    mbps = (tot["base_ll"] - tot["null_ll"]) / denom
     net = gain - control
-    # paired across validation trials: is the net gain distinguishable from zero?
-    d = per_trial_net[b.trials("val")]
+    d = per_trial_net[scored]
     z = float(d.mean() / (d.std(ddof=1) / np.sqrt(len(d)))) if len(d) > 2 and d.std() > 0 else 0.0
     return {
-        "recoverable_bits_per_spike": net,
-        "recoverable_gain_raw": gain,
-        "recoverable_gain_shuffled": control,
-        "recoverable_reference_bps": mbps,
-        "recoverable_fraction": net / mbps if mbps > 0 else float("nan"),
+        "recoverable_bits_per_spike": float(net),
+        "recoverable_gain_raw": float(gain),
+        "recoverable_gain_shuffled": float(control),
+        "recoverable_reference_bps": float(mbps),
+        "recoverable_fraction": float(net / mbps) if mbps > 0 else float("nan"),
         "recoverable_z": z,
-        "recoverable_split": split,
+        "recoverable_trials": int(scored.sum()),
+        "recoverable_split": split + (f", {n_folds}-fold cross-fitted" if folds is not None else ", validation trials"),
     }
 
 
@@ -443,3 +463,45 @@ def occupied_clusters(b: Bundle, max_k: int = 12, seed: int = 0) -> int:
         if s > best_s:
             best_k, best_s = k, s
     return best_k if best_s > 0.5 else 1
+
+
+# ------------------------------------------------------------ across seeds
+def seed_consistency(latents: dict, val: np.ndarray, trial_lens=None, max_samples: int = 200000,
+                     seed: int = 0) -> dict:
+    """How much of each model's latent variance another seed of the same configuration reproduces.
+
+    ``latents`` maps a model name to its ``(R, T, D)`` latents; every model
+    must have been fitted to the same trials (same dataset and split).
+    For each ordered pair (sibling -> model), an affine map is fitted on the
+    training trials and scored as variance-weighted R² on the validation
+    trials. A model's consistency is the best R² any sibling achieves.
+
+    Structure that is in the data is reproducible across seeds. Invented
+    structure is seed-specific, including invention the readout *uses*,
+    which cycle-consistency cannot see (CtD's "functional injectivity is
+    necessary but not sufficient").
+    """
+    names = list(latents)
+    if len(names) < 2:
+        return {}
+    R, T = next(iter(latents.values())).shape[:2]
+    for n in names:
+        if latents[n].shape[:2] != (R, T):
+            raise ValueError(f"{n}: latents {latents[n].shape[:2]} do not match {(R, T)}; seeds must share trials")
+    mask = np.ones((R, T), bool) if trial_lens is None else np.arange(T)[None, :] < np.asarray(trial_lens)[:, None]
+    tr, va = mask & ~val[:, None], mask & val[:, None]
+    rng = np.random.default_rng(seed)
+    idx_tr = np.flatnonzero(tr.ravel())
+    if len(idx_tr) > max_samples:
+        idx_tr = np.sort(rng.choice(idx_tr, max_samples, replace=False))
+    idx_va = np.flatnonzero(va.ravel())
+    flat = {n: latents[n].reshape(R * T, -1).astype(float) for n in names}
+    pair = {}
+    for tgt in names:
+        for src in names:
+            if src == tgt:
+                continue
+            m = LinearRegression().fit(flat[src][idx_tr], flat[tgt][idx_tr])
+            pair[(src, tgt)] = vw_r2(flat[tgt][idx_va], m.predict(flat[src][idx_va]))
+    per_model = {t: max(v for (s, tt), v in pair.items() if tt == t) for t in names}
+    return {"seed_consistency": per_model, "pairwise": {f"{s} -> {t}": v for (s, t), v in pair.items()}}

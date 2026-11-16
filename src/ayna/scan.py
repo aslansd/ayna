@@ -238,12 +238,26 @@ class _Context:
             self.m["input_leakage_r2"] = leak["input_leakage_r2"]
             evidence.update(leak)
             hit = leak["input_leakage_r2"] > th.leakage_r2
-            if hit:
-                dims = [i for i, v in enumerate(leak["input_leakage_per_dim"]) if v > th.leakage_r2]
-                signals.append(("leakage", f"the latent state one step *before* each input predicts it "
-                                f"(R² {leak['input_leakage_r2']:.2f} from {leak['input_leakage_pcs']} latent PCs; "
-                                f"input dims {', '.join(map(str, dims))})"))
-            self.check(det, 0, hit)
+            if b.meta.get("closed_loop"):
+                # Declared closed-loop task: true inputs (sensory feedback) depend on the state, so
+                # leakage cannot separate good inference from misattribution (RandomTarget, 0.3).
+                if hit:
+                    self.f.append(Finding(
+                        det, "info", 0,
+                        what=(f"Lag-1 input leakage is {leak['input_leakage_r2']:.2f}, but the task is declared "
+                              "closed-loop: true inputs include feedback that depends on the state, so this is "
+                              "expected whether or not inputs are misattributed. Not used as evidence; tier 1 "
+                              "decides when a dynamics callable is attached."),
+                        evidence=leak))
+                self.skip(det, 0, "closed-loop task declared (meta['closed_loop']): leakage is expected "
+                          "from sensory feedback")
+            else:
+                if hit:
+                    dims = [i for i, v in enumerate(leak["input_leakage_per_dim"]) if v > th.leakage_r2]
+                    signals.append(("leakage", f"the latent state one step *before* each input predicts it "
+                                    f"(R² {leak['input_leakage_r2']:.2f} from {leak['input_leakage_pcs']} "
+                                    f"latent PCs; input dims {', '.join(map(str, dims))})"))
+                self.check(det, 0, hit)
         elif b.inputs is None:
             self.skip(det, 0, "bundle has no inputs; models without inferred inputs cannot misattribute to them")
         else:
@@ -315,7 +329,9 @@ class _Context:
                 fix=("Judge the model on what the inputs cannot explain: residual latents, held-out conditions, "
                      "or perturbations. Compare model classes on the input-unexplained part."),
                 evidence=res))
-        self.check(det, 0, bool(sev))
+        # 0.4: only a warning counts as flagged; info-level findings are reported but are not a verdict
+        # (0.3 counted info as flagged while its truth line used the warning threshold).
+        self.check(det, 0, sev == "warning")
 
     # --------------------------------------------------------- ground truth
     def ground_truth(self):

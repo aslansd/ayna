@@ -16,6 +16,10 @@ Faults (severity in [0, 1]):
 ``underfit``            the model misses that fraction of one bit's modulation
 ``feature_invention``   invented, readout-silent latent activity; severity is
                         its share of latent variance
+``visible_invention``   the same, but the readout uses it weakly, so it reaches the
+                        predicted rates and cycle-consistency cannot see it. Its
+                        trajectory differs from seed to seed, as overfit
+                        structure does
 ``misattribution``      inferred inputs become state-like and the dynamics leak;
                         severity mixes clean and offloaded solutions
 ``input_driven``        a different ground truth: latents are a short filter of
@@ -34,10 +38,12 @@ from scipy.ndimage import gaussian_filter1d
 
 from .bundle import Bundle
 
-FAULTS = ("underfit", "feature_invention", "misattribution", "input_driven", "nonlinear_readout")
+FAULTS = ("underfit", "feature_invention", "visible_invention", "misattribution", "input_driven",
+          "nonlinear_readout")
 DEFAULT_SEVERITY = {
     "underfit": 1.0,
     "feature_invention": 0.3,
+    "visible_invention": 0.3,
     "misattribution": 0.8,
     "input_driven": 1.0,
     "nonlinear_readout": 1.0,
@@ -168,6 +174,9 @@ def make_model_outputs(truth: Truth, latent_dim: int = 8, faults: Optional[dict]
 
     # --- feature invention: readout-silent latent activity ------------------
     s_inv = float(faults.get("feature_invention", 0.0))
+    s_vis = float(faults.get("visible_invention", 0.0))
+    visible = s_vis > 0 and s_inv == 0
+    s_inv = max(s_inv, s_vis)
     if s_inv > 0 and n_inv:
         walk = np.zeros((R, T, n_inv))
         x = rng.standard_normal((R, n_inv))
@@ -180,6 +189,11 @@ def make_model_outputs(truth: Truth, latent_dim: int = 8, faults: Optional[dict]
         walk = walk * np.sqrt(target_var / n_inv)
         lat = lat + walk @ inv_dirs.T
     log_r = log_rate_hat(lat)
+    if s_inv > 0 and n_inv and visible:
+        # the readout uses the invented directions (gain comparable to the true ones), so they reach the
+        # predicted rates: cycle-consistency sees nothing wrong, but the trajectory is seed-specific
+        W_vis = rng.standard_normal((truth.rates.shape[2], n_inv)) * 0.25 / (walk.std() + 1e-12)
+        log_r = log_r + (lat @ inv_dirs) @ W_vis.T
     log_r = log_r + rate_noise * _smooth_noise(rng, log_r.shape, 3.0)
     rates = np.exp(log_r)
 

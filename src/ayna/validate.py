@@ -23,7 +23,10 @@ from .scan import Thresholds, scan
 from .synth import make_model_outputs, make_truth
 
 DETECTORS = ("UNDERFITTING", "FEATURE_INVENTION", "DYNAMICAL_MISATTRIBUTION",
-             "INPUT_INHERITED_STRUCTURE", "NONLINEAR_READOUT")
+             "INPUT_INHERITED_STRUCTURE", "NONLINEAR_READOUT", "SEED_INCONSISTENCY",
+             "FEATURE_INVENTION+SEEDS")
+# detectors judged against another detector's ground truth
+TRUTH_OF = {"SEED_INCONSISTENCY": "FEATURE_INVENTION", "FEATURE_INVENTION+SEEDS": "FEATURE_INVENTION"}
 
 # Sweep-relative truth (pre-registered in 0.3): a fault is present if its truth metric is more than
 # RELATIVE_MARGIN below the best model in the same sweep. First available metric wins.
@@ -38,6 +41,7 @@ RELATIVE_TRUTH = {
 PAIRS = (
     ("UNDERFITTING", "recoverable_fraction", "rate_r2", -1),
     ("FEATURE_INVENTION", "cycle_consistency", "state_r2", +1),
+    ("SEED_INCONSISTENCY", "seed_consistency", "state_r2", +1),
     ("DYNAMICAL_MISATTRIBUTION", "input_leakage_r2", "input_r2", -1),
     ("DYNAMICAL_MISATTRIBUTION", "rollout_gap", "input_r2", -1),
     ("DYNAMICAL_MISATTRIBUTION", "input_leakage_r2", "input_r2_noiseless", -1),
@@ -49,6 +53,25 @@ PAIRS = (
 class Validation:
     cases: list = field(default_factory=list)   # one dict per bundle
     relative_margin: float | None = RELATIVE_MARGIN   # None: not a sweep (e.g. the synthetic corpus)
+
+    def add_seed_consistency(self, consistency: dict, threshold: float | None = None) -> None:
+        """Add the seed-consistency verdict (and its union with cycle-consistency) to each case."""
+        from .select import SEED_CONSISTENCY_R2
+
+        threshold = SEED_CONSISTENCY_R2 if threshold is None else threshold
+        for case in self.cases:
+            if case["name"] not in consistency:
+                continue
+            flag = bool(consistency[case["name"]] < threshold)
+            case["metrics"]["seed_consistency"] = float(consistency[case["name"]])
+            case["pred"]["SEED_INCONSISTENCY"] = {0: flag}
+            cyc = case["pred"].get("FEATURE_INVENTION", {}).get(0)
+            if cyc is not None:
+                case["pred"]["FEATURE_INVENTION+SEEDS"] = {0: bool(cyc or flag)}
+            truth = case["truth"].get("FEATURE_INVENTION")
+            if truth is not None and flag != truth:
+                case["disagreements"].append(f"SEED_INCONSISTENCY tier 0: {'flagged' if flag else 'missed'}"
+                                             f" (truth: {'present' if truth else 'absent'})")
 
     def relative_truth(self) -> dict:
         """Sweep-relative truth: present if the truth metric is more than ``relative_margin`` below the
@@ -78,7 +101,8 @@ class Validation:
         rel = self.relative_truth() if relative else None
         for idx, case in enumerate(self.cases):
             for det in DETECTORS:
-                truth = rel[idx].get(det) if relative else case["truth"].get(det)
+                tdet = TRUTH_OF.get(det, det)
+                truth = rel[idx].get(tdet) if relative else case["truth"].get(tdet)
                 if truth is None:
                     continue
                 for tier, pred in case["pred"].get(det, {}).items():

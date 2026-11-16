@@ -353,7 +353,8 @@ def find_runs(sweep_dir: str) -> list:
 
 # ------------------------------------------------------------------- worker
 def check_run(run_dir, model_type: str, tt_dir=None, out_dir="ctd_reports", save_bundle: bool = False,
-              with_dynamics: bool = True, overrides: Optional[dict] = None) -> dict:
+              with_dynamics: bool = True, overrides: Optional[dict] = None, closed_loop: bool = False,
+              save_latents: bool = True) -> dict:
     """Load one CtD run, scan it, and write ``report.*`` plus ``select_row.json`` under ``out_dir/<run>``.
 
     ``ayna ctd`` calls this in a fresh subprocess per run: CtD's datamodules
@@ -366,6 +367,8 @@ def check_run(run_dir, model_type: str, tt_dir=None, out_dir="ctd_reports", save
     from ..select import select_row
 
     b = load_run(run_dir, model_type, tt_dir, with_dynamics=with_dynamics)
+    if closed_loop:
+        b.meta["closed_loop"] = True
     th = Thresholds().update(overrides or {})
     report = scan(b, th)
     run_out = Path(out_dir) / b.name
@@ -374,6 +377,9 @@ def check_run(run_dir, model_type: str, tt_dir=None, out_dir="ctd_reports", save
     (run_out / "select_row.json").write_text(json.dumps(row, default=float))
     if save_bundle:
         b.save(run_out / "bundle.npz")
+    if save_latents:   # for seed consistency across runs, computed when `ayna ctd` aggregates
+        np.savez_compressed(run_out / "latents.npz", latents=b.latents.astype(np.float16), val=b.val,
+                            trial_lens=b.trial_lens if b.trial_lens is not None else np.zeros(0, int))
     return {"name": b.name, "out": str(run_out), "flags": sorted(report.flagged()),
             "truth": sorted(report.ground_truth_flags())}
 
@@ -392,8 +398,10 @@ def _main(argv=None) -> int:
     p.add_argument("--save-bundle", action="store_true")
     p.add_argument("--no-dynamics", action="store_true")
     p.add_argument("--overrides", default="{}", help="JSON dict of threshold overrides")
+    p.add_argument("--closed-loop", action="store_true")
     a = p.parse_args(argv)
-    res = check_run(a.run_dir, a.model_type, a.tt, a.out, a.save_bundle, not a.no_dynamics, json.loads(a.overrides))
+    res = check_run(a.run_dir, a.model_type, a.tt, a.out, a.save_bundle, not a.no_dynamics, json.loads(a.overrides),
+                    closed_loop=a.closed_loop)
     print(json.dumps(res))
     return 0
 
