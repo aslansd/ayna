@@ -503,3 +503,28 @@ def test_config_key_groups_seeds():
     assert config_key("latent_size=10_seed=2_max_epochs=150_batch=25") == "latent_size=10_max_epochs=150_batch=25"
     assert config_key("node8_s0") == "node8"
     assert seed_groups(["a_seed=0", "a_seed=1", "b_seed=0"]) == {"a": ["a_seed=0", "a_seed=1"]}
+
+
+def test_ctd_resume_skips_scanned_runs(tmp_path, monkeypatch, capsys):
+    import subprocess
+
+    from ayna.select import select_row
+
+    runs, out = tmp_path / "sweep", tmp_path / "out"
+    for name in ("latent_size=3_seed=0", "latent_size=3_seed=1"):
+        d = runs / name
+        d.mkdir(parents=True)
+        (d / "model.pkl").write_bytes(b"")
+        (d / "datamodule.pkl").write_bytes(b"")
+        b = synth(name)
+        scan(b).save(out / name)
+        (out / name / "select_row.json").write_text(json.dumps(select_row(b)))
+
+    def boom(*a, **k):
+        raise AssertionError("--resume must not rescan a run that has a report")
+
+    monkeypatch.setattr(subprocess, "run", boom)
+    main(["ctd", str(runs), "--model-type", "SAE", "--out", str(out), "--resume"])
+    text = capsys.readouterr().out
+    assert text.count("already scanned") == 2
+    assert "== select ==" in text

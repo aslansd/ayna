@@ -33,7 +33,7 @@ UNDERFITTING                   0    0    0    0    6        n/a     n/a
 
 rank agreement with ground truth (Spearman)
 metric                  truth                  n     rho  expected
-recoverable_fraction    rate_r2                6   -1.00  negative
+recoverable_fraction    rate_r2                6   -0.94  negative
 cycle_consistency       state_r2               6    0.94  positive
 input_leakage_r2        input_r2               6   -0.60  negative
 rollout_gap             input_r2               6   -0.94  negative
@@ -47,3 +47,4 @@ disagreements
   kl_co_scale=1.00E-04_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0 UNDERFITTING tier 0: missed (truth: present); DYNAMICAL_MISATTRIBUTION tier 0: missed (truth: present); DYNAMICAL_MISATTRIBUTION tier 1: missed (truth: present)
   kl_co_scale=1.00E-05_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0 UNDERFITTING tier 0: missed (truth: present); DYNAMICAL_MISATTRIBUTION tier 1: missed (truth: present)
   kl_co_scale=1.00E-06_prefix=20241004_NBFF_NoisyGRU_Final_df=5_seed=0 UNDERFITTING tier 0: missed (truth: present)
+
