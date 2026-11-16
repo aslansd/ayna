@@ -1,3 +1,16 @@
+[1/6] prefix=tt_3bff_latent_size=16_max_epochs=1000_seed=0
+    flags: FEATURE_INVENTION | ground truth: FEATURE_INVENTION
+[2/6] prefix=tt_3bff_latent_size=32_max_epochs=1000_seed=0
+    flags: FEATURE_INVENTION | ground truth: FEATURE_INVENTION
+[3/6] prefix=tt_3bff_latent_size=3_max_epochs=1000_seed=0
+    flags: UNDERFITTING | ground truth: UNDERFITTING
+[4/6] prefix=tt_3bff_latent_size=5_max_epochs=1000_seed=0
+    flags: UNDERFITTING | ground truth: UNDERFITTING
+[5/6] prefix=tt_3bff_latent_size=64_max_epochs=1000_seed=0
+    flags: FEATURE_INVENTION | ground truth: FEATURE_INVENTION
+[6/6] prefix=tt_3bff_latent_size=8_max_epochs=1000_seed=0
+    flags: none | ground truth: none
+
 == select ==
 model                  latents    co_bps   cycle  stateR2  rateR2
 -----------------------------------------------------------------
@@ -32,3 +45,5 @@ rank agreement with ground truth (Spearman)
 metric                  truth                  n     rho  expected
 recoverable_fraction    rate_r2                6   -1.00  negative
 cycle_consistency       state_r2               6    0.94  positive
+
+per-run reports, select and validation written to out04_walk_node/

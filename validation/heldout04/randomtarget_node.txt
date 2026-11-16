@@ -1,0 +1,63 @@
+[1/6] latent_size=10_seed=2_max_epochs=150_batch=25
+    flags: INPUT_INHERITED_STRUCTURE | ground truth: FEATURE_INVENTION, INPUT_INHERITED_STRUCTURE, UNDERFITTING
+[2/6] latent_size=10_seed=3_max_epochs=150_batch=25
+    flags: INPUT_INHERITED_STRUCTURE | ground truth: FEATURE_INVENTION, INPUT_INHERITED_STRUCTURE, UNDERFITTING
+[3/6] latent_size=3_seed=2_max_epochs=150_batch=25
+    flags: INPUT_INHERITED_STRUCTURE, UNDERFITTING | ground truth: INPUT_INHERITED_STRUCTURE, UNDERFITTING
+[4/6] latent_size=3_seed=3_max_epochs=150_batch=25
+    flags: INPUT_INHERITED_STRUCTURE, UNDERFITTING | ground truth: INPUT_INHERITED_STRUCTURE, UNDERFITTING
+[5/6] latent_size=64_seed=2_max_epochs=150_batch=25
+    flags: FEATURE_INVENTION | ground truth: FEATURE_INVENTION, INPUT_INHERITED_STRUCTURE, UNDERFITTING
+[6/6] latent_size=64_seed=3_max_epochs=150_batch=25
+    flags: FEATURE_INVENTION, UNDERFITTING | ground truth: FEATURE_INVENTION, INPUT_INHERITED_STRUCTURE, UNDERFITTING
+
+== select ==
+model                 latents    co_bps   cycle  seeds  stateR2  rateR2
+-----------------------------------------------------------------------
+latent_size=3_seed=2        3    0.0170   1.000   0.99    0.969   0.729
+latent_size=3_seed=3        3    0.0166   1.000   0.99    0.969   0.729
+latent_size=10_seed=2      10    0.0180   1.000   0.90    0.870   0.864 <- recommended
+latent_size=10_seed=3      10    0.0178   1.000   0.91    0.887   0.867
+latent_size=64_seed=2      64    0.0152   0.727   0.46    0.324   0.658
+latent_size=64_seed=3      64    0.0139   0.752   0.45    0.307   0.644
+
+WARNING SEED_INCONSISTENCY
+  3 model(s) have latent structure that no other seed of the same configuration
+  reproduces (best cross-seed R² below 0.9):
+  latent_size=10_seed=2_max_epochs=150_batch=25 (0.90),
+  latent_size=64_seed=2_max_epochs=150_batch=25 (0.46),
+  latent_size=64_seed=3_max_epochs=150_batch=25 (0.45). Structure that is in the data
+  should be reproducible across seeds; seed-specific structure is likely invented, even
+  when the readout uses it and cycle-consistency is high.
+The best-reconstructing model (latent_size=10_seed=2_max_epochs=150_batch=25) is also the recommended one.
+
+== validation against the task-trained ground truth ==
+6 bundles with ground truth
+
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    2    0    2    2       1.00    0.50
+FEATURE_INVENTION+SEEDS        0    3    0    1    2       1.00    0.75
+INPUT_INHERITED_STRUCTURE      0    4    0    2    0       1.00    0.67
+SEED_INCONSISTENCY             0    3    0    1    2       1.00    0.75
+UNDERFITTING                   0    3    0    3    0       1.00    0.50
+
+against sweep-relative truth (more than 0.05 below the best model here)
+detector                    tier   TP   FP   FN   TN  precision  recall
+FEATURE_INVENTION              0    2    0    2    2       1.00    0.50
+FEATURE_INVENTION+SEEDS        0    3    0    1    2       1.00    0.75
+SEED_INCONSISTENCY             0    3    0    1    2       1.00    0.75
+UNDERFITTING                   0    3    0    1    2       1.00    0.75
+
+rank agreement with ground truth (Spearman)
+metric                  truth                  n     rho  expected
+recoverable_fraction    rate_r2                6    0.20  negative  <- disagrees
+cycle_consistency       state_r2               6    0.78  positive
+seed_consistency        state_r2               6    1.00  positive
+
+disagreements
+  latent_size=10_seed=2_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present); FEATURE_INVENTION tier 0: missed (truth: present)
+  latent_size=10_seed=3_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present); FEATURE_INVENTION tier 0: missed (truth: present); SEED_INCONSISTENCY tier 0: missed (truth: present)
+  latent_size=64_seed=2_max_epochs=150_batch=25 UNDERFITTING tier 0: missed (truth: present); INPUT_INHERITED_STRUCTURE tier 0: missed (truth: present)
+  latent_size=64_seed=3_max_epochs=150_batch=25 INPUT_INHERITED_STRUCTURE tier 0: missed (truth: present)
+
+per-run reports, select and validation written to out04_rt/

@@ -186,6 +186,9 @@ def cmd_ctd(args):
     failed = []
     for i, run in enumerate(runs, 1):
         print(f"[{i}/{len(runs)}] {run.name}", flush=True)
+        if args.resume and (out / run.name / "report.json").exists():
+            print("    already scanned (--resume)", flush=True)
+            continue
         cmd = [sys.executable, "-m", "ayna.adapters.ctd", str(run), args.model_type, "--out", str(out),
                "--overrides", overrides]
         if args.tt:
@@ -336,6 +339,8 @@ def build_parser():
     s.add_argument("--out", default="ctd_reports")
     s.add_argument("--save-bundles", action="store_true", help="also write each run as a bundle.npz (large)")
     s.add_argument("--no-dynamics", action="store_true", help="skip tier-1 probes")
+    s.add_argument("--resume", action="store_true",
+                   help="skip runs that already have a report in --out (finish an interrupted sweep)")
     s.add_argument("--closed-loop", action="store_true",
                    help="declare a closed-loop task (true inputs depend on the state): tier-0 input leakage "
                         "becomes informational")
